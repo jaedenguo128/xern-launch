@@ -1191,12 +1191,12 @@ input::placeholder{color:var(--muted);opacity:.8}
   function say(text, ok){ msg.className = ok ? "msg ok" : "msg"; msg.textContent = text; }
   function fail(text, field){ say(text, false); if(field) $(field).focus(); }
 
-  // The session lives only in memory, so reloading or revisiting the site logs you out.
+  // Preserve login through page reloads within the current browser tab.
   var current = null;
-  function saveSession(s){ current = s; }
+  try { current = JSON.parse(sessionStorage.getItem(STORE) || 'null'); } catch(e) {}
+  function saveSession(s){ current = s; try { sessionStorage.setItem(STORE,JSON.stringify(s)); } catch(e) {} }
   function loadSession(){ return current; }
-  function clearSession(){ current = null; }
-  try{ localStorage.removeItem(STORE); }catch(e){}
+  function clearSession(){ current = null; try { sessionStorage.removeItem(STORE); } catch(e) {} }
 
   function headers(token){
     var h = { "apikey": KEY, "Content-Type": "application/json" };
@@ -3159,7 +3159,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       saveSession(s);
       p = await fetchProfile(s);
     }
-    if(!p.ok){ clearSession(); return false; }
+    if(!p.ok){ throw new Error('Profile request failed (HTTP '+p.status+'): '+(errText(p.data)||'Please retry')); }
     var row = Array.isArray(p.data) ? p.data[0] : null;
     showApp(row ? row.username : "commander", row ? row.money : 0);
     return true;
@@ -3201,14 +3201,22 @@ input::placeholder{color:var(--muted);opacity:.8}
       }
       saveSession({ access_token: res.data.access_token, refresh_token: res.data.refresh_token });
       say("", false);
-      if(!(await showHome())) fail("Signed in, but your profile couldn’t be loaded. Try again.");
+      if(!(await showHome())) fail("Session could not be established. Please try again.");
     } catch(err){
-      fail("Couldn’t reach the server. Check your connection and try again.");
+      console.error('Xern login error:',err);
+      fail("Login problem: "+(err&&err.message||"Could not connect to server"));
     } finally {
       btn.disabled = false;
     }
   });
 
+  // Recover an authenticated tab after a reload instead of returning to login.
+  if(loadSession()&&loadSession().access_token){
+    showHome().catch(function(err){
+      console.error('Xern session restore failed:',err);
+      say('Previous session could not be restored: '+(err&&err.message||'Please log in again.'),false);
+    });
+  }
   $("logout").onclick = async function(){
     var s = loadSession();
     if(s && s.access_token){ try{ await api("/auth/v1/logout", "POST", null, s.access_token); }catch(e){} }
