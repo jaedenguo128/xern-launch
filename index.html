@@ -984,16 +984,16 @@ input::placeholder{color:var(--muted);opacity:.8}
         <p class="soon" id="stkRange" style="margin:6px 0 0;font-size:13px"></p>
         <div class="stk-trade">
           <div>
-            <label for="buyAmt">Spend Xergs to buy</label>
-            <input id="buyAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 1000 Xergs">
-            <small class="soon">Enter how much money to invest. Fractional shares are calculated automatically.</small>
+            <label for="buyAmt">Number of shares to buy</label>
+            <input id="buyAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 10 shares">
+            <small class="soon">Buy 1, 2, 3 or more whole shares. Your total cost is shown below.</small>
             <div class="est" id="buyEst"></div>
             <button class="go" id="buyBtn">Buy</button>
           </div>
           <div>
-            <label for="sellAmt">Sell for Xergs</label>
-            <div class="row"><input id="sellAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 500 Xergs"><button class="mini" id="sellMax" type="button">Max</button></div>
-            <small class="soon">Enter your target cash proceeds. The game sells the matching fraction of your shares.</small>
+            <label for="sellAmt">Number of shares to sell</label>
+            <div class="row"><input id="sellAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 5 shares"><button class="mini" id="sellMax" type="button">Max</button></div>
+            <small class="soon">Sell whole shares only. Max also lets you close an older fractional holding.</small>
             <div class="est" id="sellEst"></div>
             <button class="go sell" id="sellBtn">Sell</button>
           </div>
@@ -1582,14 +1582,13 @@ input::placeholder{color:var(--muted);opacity:.8}
     return null;
   }
   function stkEst(){
-    var v = Number($("buyAmt").value), q = Number($("sellAmt").value), c = curStock();
+    var buy=Number($("buyAmt").value), sell=Number($("sellAmt").value), c=curStock();
     if(!c){$("buyEst").textContent="";$("sellEst").textContent="";return;}
     var price=Number(c.price), depth=Math.max(1,Number(c.depth)||1), held=Number(stk.hold[c.symbol]||0);
-    var buyShares=v>0?(depth/price)*(1-Math.exp(-Math.floor(v)/depth)):0;
-    var maxSell=held>0?Math.floor(depth*Math.log(1+held*price/depth)):0;
-    var sellShares=q>0?Math.min(held,(depth/price)*(Math.exp(Math.min(q,depth*20)/depth)-1)):0;
-    $("buyEst").textContent = v > 0 ? "Investment: " + fm(Math.floor(v)) + " Xergs · approx. " + fm(buyShares,6) + " shares" : "";
-    $("sellEst").textContent = q > 0 ? "Target: " + fm(Math.floor(q)) + " Xergs · approx. " + fm(sellShares,6) + " shares" + (q>maxSell?" (max proceeds about "+fm(maxSell)+" Xergs)":"") : "";
+    var bi=Math.min(.02,buy*price/Math.max(1000000,depth*400));
+    var si=Math.min(.02,sell*price/Math.max(1000000,depth*400));
+    $("buyEst").textContent=Number.isInteger(buy)&&buy>0 ? "Estimated cost: "+fm(Math.ceil(buy*price*(1+bi/2)))+" Xergs · "+fm(buy,0)+" whole shares" : (buy>0?"Enter a whole number of shares.":"");
+    $("sellEst").textContent=Number.isInteger(sell)&&sell>0 ? "Estimated proceeds: "+fm(Math.floor(Math.min(sell,held)*price*(1-si/2)))+" Xergs"+(sell>Math.floor(held)&&!(held<1&&sell===1)?" · not enough shares":"") : (sell>0?"Enter a whole number of shares.":"");
   }
   function stkRenderList(){
     var html = "";
@@ -1678,8 +1677,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   async function stkTrade(side){
     var c = curStock(), s = loadSession(); if(!c || !s || !s.access_token) return;
     var amt = Number(side === "buy" ? $("buyAmt").value : $("sellAmt").value);
-    if(!(amt > 0) || !Number.isFinite(amt)) return stkNote("Enter a positive amount of Xergs.", true);
-    amt = Math.floor(amt); if(amt<1) return stkNote("Enter at least 1 Xerg.", true);
+    if(!(amt > 0) || !Number.isSafeInteger(amt)) return stkNote("Enter a positive whole number of shares (1, 2, 3...).", true);
     $("buyBtn").disabled = true; $("sellBtn").disabled = true; stkNote("");
     try{
       var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt }, s.access_token);
@@ -1688,10 +1686,12 @@ input::placeholder{color:var(--muted);opacity:.8}
         updateXergsDisplay(d.money);
         stkNote(side === "buy" ? "Invested " + fm(d.value) + " Xergs and received " + fm(d.shares,6) + " shares." : "Sold " + fm(d.shares,6) + " shares for " + fm(d.value) + " Xergs.");
         $("buyAmt").value = ""; $("sellAmt").value = "";
+      } else if(d.error === "whole_shares_required"){
+        stkNote("Please enter a whole number of shares.", true);
       } else if(d.error === "too_small"){
         stkNote("That amount is too small.", true);
       } else {
-        stkNote(side === "buy" ? "You don’t have enough Xergs." : "You don’t own enough stock for that amount. Use Max to sell all your holdings.", true);
+        stkNote(side === "buy" ? "Not enough Xergs to buy that many shares." : "Not enough shares. Use Max to sell all available shares.", true);
       }
     }catch(e){
       stkNote("Couldn’t reach the server. Try again.", true);
@@ -1707,7 +1707,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     stkRenderList(); stkLoadChart().catch(function(){});
   });
   $("buyAmt").oninput = stkEst; $("sellAmt").oninput = stkEst;
-  $("sellMax").onclick = function(){ var c = curStock(); if(!c){$("sellAmt").value="";return;} var held=Number(stk.hold[c.symbol]||0),depth=Math.max(1,Number(c.depth)||1),price=Number(c.price); $("sellAmt").value=held>0?Math.floor(depth*Math.log(1+held*price/depth)):0; stkEst(); };
+  $("sellMax").onclick = function(){ var c=curStock(); if(!c){$("sellAmt").value="";return;} var held=Number(stk.hold[c.symbol]||0); $("sellAmt").value=held>0?Math.max(1,Math.floor(held)):0; stkEst(); };
   $("buyBtn").onclick = function(){ stkTrade("buy"); };
   $("sellBtn").onclick = function(){ stkTrade("sell"); };
 
