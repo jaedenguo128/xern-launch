@@ -2300,12 +2300,15 @@ input::placeholder{color:var(--muted);opacity:.8}
     var options=neighbors.filter(function(k){return k!==m.walkFrom;});
     return (options.length?options:neighbors)[Math.floor(Math.random()*(options.length||neighbors.length))];
   }
+  // Render at most 50 visual troop sprites per player; real inventory is unchanged.
+  var XERN_MAX_VISIBLE_TROOPS=50;
   function landRenderRallyMarkers(){
     var owned=landOwnedKeys(), old=new Map(nativeMarkers.map(function(m){return [m.markerId,m];}));
     var next=[];if(!owned.length){nativeMarkers=[];landRenderGrid();return;}
     var safeOwned=owned.filter(nativePlotIsLand);if(!safeOwned.length)return;
+    var visibleRemaining=XERN_MAX_VISIBLE_TROOPS;
     (teamUnits||[]).filter(function(u){return !!u.stationed_plot_key&&Number(u.unit_count)>0;}).forEach(function(u){
-      var count=Math.max(0,Math.floor(Number(u.unit_count)||0)),command=landUnitCommands[u.id]||'explore';
+      var count=Math.min(visibleRemaining,Math.max(0,Math.floor(Number(u.unit_count)||0)));visibleRemaining-=count;var command=landUnitCommands[u.id]||'explore';
       var start=safeOwned.includes(u.stationed_plot_key)?u.stationed_plot_key:safeOwned[0];
       for(var i=0;i<count;i++){
         var id=String(u.id)+':'+i,m=old.get(id);
@@ -2340,8 +2343,10 @@ input::placeholder{color:var(--muted);opacity:.8}
       if(r.ok&&Array.isArray(r.data)){
         nativeOtherTroops=r.data.filter(function(u){return Number(u.unit_count)>0;});
         nativeEnemyWalkers=[];
+        var visibleByOwner=Object.create(null);
         nativeOtherTroops.forEach(function(u){
-          var count=Math.max(0,Math.floor(Number(u.unit_count)||0));
+          var owner=String(u.owner_id),remaining=Math.max(0,XERN_MAX_VISIBLE_TROOPS-(visibleByOwner[owner]||0));
+          var count=Math.min(remaining,Math.max(0,Math.floor(Number(u.unit_count)||0)));visibleByOwner[owner]=(visibleByOwner[owner]||0)+count;
           for(var i=0;i<count;i++)nativeEnemyWalkers.push({id:String(u.id)+':'+i,index:i,unit:u,ownerId:u.owner_id,homeKey:u.stationed_plot_key});
         });
         var mr=await api('/rest/v1/warfare_marches?select=unit_id,owner_id,current_plot_key,target_plot_key,last_step_at,active,mode','GET',null,session.access_token);
@@ -2805,7 +2810,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   function teamAvatarMarkup(u){return '<img class="troop-portrait" src="'+troopArtSvg(u)+'" alt="" loading="lazy">';}
   function landCopySpawnKeys(u,owned){
-    var count=Math.max(1,Math.floor(Number(u.unit_count)||1)),storeKey='xern_spawn_points_'+String(landUserId||'guest'),store={};
+    var count=Math.min(XERN_MAX_VISIBLE_TROOPS,Math.max(1,Math.floor(Number(u.unit_count)||1))),storeKey='xern_spawn_points_'+String(landUserId||'guest'),store={};
     try{store=JSON.parse(localStorage.getItem(storeKey)||'{}')||{};}catch(e){store={};}
     var arr=Array.isArray(store[u.id])?store[u.id].slice(0,count):[];
     for(var i=0;i<count;i++)if(!arr[i]||owned.indexOf(arr[i])<0)arr[i]=owned.length?owned[Math.floor(Math.random()*owned.length)]:u.stationed_plot_key;
@@ -2854,7 +2859,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     var totalTroopsOwned=teamUnits.reduce(function(n,u){return n+Math.max(0,Number(u.unit_count)||0);},0);
     var income=teamUnits.reduce(function(n,u){return n+(ownedPlots.has(u.stationed_plot_key)?Math.max(0,Number(u.unit_count)||0)*Math.max(0,Number(u.gold_per_hour)||0):0);},0);
     $('warfareIncome').textContent=income.toLocaleString()+' Gold/hr';
-    var afterEl=$('landTroopsAfter');if(afterEl){var deployedPreview=teamUnits.reduce(function(n,u){return n+(ownedPlots.has(u.stationed_plot_key)?Math.max(0,Number(u.unit_count)||0):0);},0);afterEl.textContent=deployedPreview.toLocaleString()+' troops on map';}
+    var afterEl=$('landTroopsAfter');if(afterEl){var deployedPreview=teamUnits.reduce(function(n,u){return n+(ownedPlots.has(u.stationed_plot_key)?Math.max(0,Number(u.unit_count)||0):0);},0);afterEl.textContent=Math.min(XERN_MAX_VISIBLE_TROOPS,deployedPreview).toLocaleString()+' troop sprites shown (of '+deployedPreview.toLocaleString()+' deployed)';}
     var chart=$('warfareCharacterChart');
     if(chart){
       // Inventory is authoritative: a troop remains owned even when its land is sold.
@@ -2866,7 +2871,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       var rarityOrderChart={mythical:0,legendary:1,epic:2,rare:3,common:4};
       counts.sort(function(a,b){return (rarityOrderChart[a.unit.rarity]??5)-(rarityOrderChart[b.unit.rarity]??5)||String(teamDisplayName(a.unit)).localeCompare(String(teamDisplayName(b.unit)));});
       var deployedCount=teamUnits.reduce(function(sum,u){return sum+(ownedPlots.has(u.stationed_plot_key)?Math.max(0,Math.floor(Number(u.unit_count)||0)):0);},0);
-      chart.innerHTML='<div class="wcc-head"><strong>🪖 Total Troops Owned: '+totalTroopsOwned.toLocaleString()+'</strong><span>📍 '+deployedCount.toLocaleString()+' deployed · '+counts.length+' owned troop types</span></div>'+
+      chart.innerHTML='<div class="wcc-head"><strong>🪖 Total Troops Owned: '+totalTroopsOwned.toLocaleString()+'</strong><span>📍 '+deployedCount.toLocaleString()+' deployed · '+counts.length+' owned troop types</span></div><div role="note" style="margin:0 0 12px;padding:9px 12px;border:1px solid #527a96;border-radius:9px;background:#122d40;color:#d9efff;font-size:12px;line-height:1.5">🗺️ <strong>Map display limit: 50 troops per player.</strong> You can own and buy more than 50 (up to the game's troop ownership limit). Extra troops still count toward your army strength and expansion; only their map icons are hidden to reduce lag.</div>'+
         (counts.length?'<div class="wcc-grid">'+counts.map(function(x){var rarity=String(x.unit.rarity||'common').toLowerCase();return '<div class="wcc-item '+teamEsc(rarity)+'"><div class="wcc-title"><span>'+teamPortraitKey(x.unit)+'</span><span class="wcc-name">'+teamEsc(teamDisplayName(x.unit))+'</span><strong>×'+x.count.toLocaleString()+'</strong></div><div class="wcc-track"><div class="wcc-fill" style="width:'+Math.max(0,Math.min(100,x.count/maxCount*100))+'%"></div></div></div>';}).join('')+'</div>':'<p class="soon">You currently own 0 troops. Troops you buy or unlock will appear here, even without land.</p>');
     }
     if(!teamUnits.length){el.innerHTML='<p class="soon">No unlocked units yet. Open crates in the Team tab first.</p>';return;}
