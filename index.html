@@ -1790,8 +1790,8 @@ input::placeholder{color:var(--muted);opacity:.8}
     var price=Number(c.price), depth=Math.max(1,Number(c.depth)||1), held=Number(stk.hold[c.symbol]||0);
     var bi=Math.min(.02,buy*price/Math.max(1000000,depth*400),1/Math.max(price,.0001));
     var si=Math.min(.02,sell*price/Math.max(1000000,depth*400),1/Math.max(price,.0001));
-    $("buyEst").textContent=Number.isInteger(buy)&&buy>0 ? "Estimated cost: "+fm(Math.ceil(buy*price*(1+bi/2)))+" Xergs · "+fm(buy,0)+" whole shares" : (buy>0?"Enter a whole number of shares.":"");
-    $("sellEst").textContent=Number.isInteger(sell)&&sell>0 ? "Estimated proceeds: "+fm(Math.floor(Math.min(sell,held)*price*(1-si/2)))+" Xergs"+(sell>Math.floor(held)&&!(held<1&&sell===1)?" · not enough shares":"") : (sell>0?"Enter a whole number of shares.":"");
+    $("buyEst").textContent=Number.isInteger(buy)&&buy>0 ? "Estimated cost: "+fm(Math.round(buy*price))+" Xergs · "+fm(buy,0)+" whole shares" : (buy>0?"Enter a whole number of shares.":"");
+    $("sellEst").textContent=Number.isInteger(sell)&&sell>0 ? "Estimated proceeds: "+fm(Math.round(Math.min(sell,held)*price))+" Xergs"+(sell>Math.floor(held)&&!(held<1&&sell===1)?" · not enough shares":"") : (sell>0?"Enter a whole number of shares.":"");
   }
   function stkRenderList(){
     var html = "";
