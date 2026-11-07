@@ -2995,4 +2995,30 @@ input::placeholder{color:var(--muted);opacity:.8}
  var amount=document.getElementById('giftAmount');if(!amount)return;
  function update(){var raw=amount.value.trim();var valid=/^[0-9]+$/.test(raw);var n=valid?Number(raw):0;
  var fee=Number.isSafeInteger(n)&&n>0?Math.ceil(n*0.0005):0;
- var good=Number.isSafeInteger(n)&&n>0&&n<=1e12;
+ var good=Number.isSafeInteger(n)&&n>0&&n<=1e12; document.getElementById('giftNet').textContent=good?n.toLocaleString()+' Xergs':'0 Xergs';
+ document.getElementById('giftFee').textContent=good?fee.toLocaleString()+' Xergs':'0 Xergs';
+ document.getElementById('giftTotal').textContent=good?(n+fee).toLocaleString()+' Xergs':'0 Xergs';
+ document.getElementById('giftStatus').textContent=!good&&raw?'Enter a whole-number gift between 1 and 1 trillion Xergs.':'The transfer service is not yet enabled. This calculator does not move money.';
+ }
+ amount.addEventListener('input',update);update();
+})();
+</script>
+<style>
+#xernWeekendNotice{position:relative;z-index:2;max-width:1050px;margin:10px auto;padding:11px 15px;border:1px solid #607a9b;border-radius:10px;background:#14253b;color:#e5efff;font:600 14px system-ui,sans-serif;text-align:center}
+#xernWeekendNotice strong{color:#facc15}
+</style>
+<div id="xernWeekendNotice" role="status" aria-live="polite">Loading clan warfare rules…</div>
+<script>
+(function(){
+ function updateXernWeekendRules(){
+  var now=new Date(),day=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short'}).format(now),weekend=day==='Sat'||day==='Sun';
+  var el=document.getElementById('xernWeekendNotice');if(!el)return;
+  el.innerHTML=weekend
+   ? '<strong>⚔ WEEKEND SOLO WARFARE</strong> — Clan support is OFF. Fight and expand with your own troops. You may attack clanmates. Sunday 12:00 AM Eastern: weekly clan prize.'
+   : '<strong>🛡 WEEKDAY CLAN ALLIANCES</strong> — Connected clan support is ON. Friendly attacks are blocked. Weekend solo warfare starts Saturday 12:00 AM Eastern.';
+ }
+ updateXernWeekendRules();setInterval(updateXernWeekendRules,60000);
+})();
+</script>
+</body>
+</html>
