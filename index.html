@@ -614,6 +614,47 @@ input::placeholder{color:var(--muted);opacity:.8}
 @media(max-width:1080px){.home-wealth-layout{grid-template-columns:minmax(220px,300px) minmax(0,1fr)}.xern-home-announcements{grid-column:2;grid-row:1;position:static}.home-main{grid-column:2;grid-row:2}}
 @media(max-width:760px){.home-wealth-layout{grid-template-columns:1fr}.xern-home-announcements{grid-column:1;grid-row:auto}.home-main{grid-column:1;grid-row:auto}}
 </style>
+<style id="xern-chromebook-light-contrast">
+/* High-contrast daylight palette: readable on light-mode Chromebooks. */
+:root:not([data-theme="dark"]){
+  --sea:#e9eef8;--panel:#ffffff;--ink:#101d35;--muted:#344967;
+  --line:#7c90b0;--brass:#aa102b;--brass-ink:#ffffff;
+  --err:#a31a2c;--ok:#12613d;color-scheme:light;
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]):not([data-theme="dark"]){
+    --sea:#1b2a44;--panel:#243756;--ink:#f1f4fa;--muted:#a9b7d0;
+    --line:#3f5a86;--brass:#d62f46;--brass-ink:#fff;
+    --err:#ffb4a8;--ok:#7fd8a8;color-scheme:dark;
+  }
+}
+:root[data-theme="light"]{
+  --sea:#e9eef8;--panel:#fff;--ink:#101d35;--muted:#344967;
+  --line:#7c90b0;--brass:#aa102b;--brass-ink:#fff;
+  --err:#a31a2c;--ok:#12613d;color-scheme:light;
+}
+@media(prefers-color-scheme:light){
+  :root:not([data-theme="dark"]) body{background:#e9eef8;color:#101d35}
+  :root:not([data-theme="dark"]) .panel,
+  :root:not([data-theme="dark"]) .bal,
+  :root:not([data-theme="dark"]) .gift,
+  :root:not([data-theme="dark"]) .market-item,
+  :root:not([data-theme="dark"]) .stk-sum{box-shadow:0 3px 12px rgba(16,29,53,.10)}
+}
+:root[data-theme="light"] body{background:#e9eef8;color:#101d35}
+:root:not([data-theme="dark"]) input,
+:root:not([data-theme="dark"]) select,
+:root:not([data-theme="dark"]) textarea{border-color:#7489a9}
+:root:not([data-theme="dark"]) input::placeholder,
+:root:not([data-theme="dark"]) textarea::placeholder{color:#435875;opacity:1}
+:root:not([data-theme="dark"]) .nav button:hover,
+:root:not([data-theme="dark"]) .tabs button:hover,
+:root:not([data-theme="dark"]) .c-nav-btn:hover{background:#d8e2f1;color:#101d35}
+:root:not([data-theme="dark"]) button:focus-visible,
+:root:not([data-theme="dark"]) a:focus-visible,
+:root:not([data-theme="dark"]) input:focus-visible,
+:root:not([data-theme="dark"]) select:focus-visible{outline:3px solid #a60d31;outline-offset:3px}
+</style>
 </head>
 <body>
 
@@ -956,8 +997,7 @@ input::placeholder{color:var(--muted);opacity:.8}
             <div class="est" id="sellEst"></div>
             <button class="go sell" id="sellBtn">Sell</button>
           </div>
-        </div>
-        <p class="giftmsg" id="stkMsg" role="status"></p>
+        </div>        <p class="giftmsg" id="stkMsg" role="status"></p>
       </div>
     </div>
   </section>
@@ -997,7 +1037,8 @@ input::placeholder{color:var(--muted);opacity:.8}
 </div><div id="battleResult" style="margin-top:7px;font-size:13px"></div>
 </div>
     <h2>World Territory</h2>
-    <p class="soon" style="text-align:left;margin:0 0 14px">Choose your homebase area once, then let your squad expand your connected territory across the pixel Earth.</p>    <div class="warfare-economy"><div><span>YOUR GOLD</span><strong id="warfareGold">0</strong></div><div><span>PASSIVE INCOME</span><strong id="warfareIncome">0 Gold/hr</strong></div><div><span>OFFLINE EXPANSION</span><strong>Stationed troops only</strong></div></div>
+    <p class="soon" style="text-align:left;margin:0 0 14px">Choose your homebase area once, then let your squad expand your connected territory across the pixel Earth.</p>
+    <div class="warfare-economy"><div><span>YOUR GOLD</span><strong id="warfareGold">0</strong></div><div><span>PASSIVE INCOME</span><strong id="warfareIncome">0 Gold/hr</strong></div><div><span>OFFLINE EXPANSION</span><strong>Stationed troops only</strong></div></div>
     <div class="land-layout">
       <div class="land-map-card">
         <div class="land-map-top"><strong>🗺️ Land map</strong><p>Drag to pan · scroll to zoom · pick a relative area for your homebase, then expand with your squad</p></div>
@@ -1955,8 +1996,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   function nativeSize(){return {w:nativeCanvas.clientWidth||900,h:nativeCanvas.clientHeight||600};}
   function nativeScale(){return nativeSize().w/360*nativeZoom*1.48;}
   function nativeYScale(){return nativeSize().w/360*nativeZoom*.70;}
-  function nativeProject(lat,lng){var z=nativeScale(),sz=nativeSize();return {x:sz.w/2+(lng-nativeCenter.lng)*z,y:sz.h/2-(nativeMerc(lat)-nativeMerc(nativeCenter.lat))*180*nativeYScale()};}
-  function nativeUnproject(x,y){var z=nativeScale(),sz=nativeSize();return {lng:Math.max(-180,Math.min(179.999,nativeCenter.lng+(x-sz.w/2)/z)),lat:nativeInvMerc(nativeMerc(nativeCenter.lat)-(y-sz.h/2)/(180*nativeYScale()))};}
+  function nativeProject(lat,lng){var z=nativeScale(),sz=nativeSize();return {x:sz.w/2+(lng-nativeCenter.lng)*z,y:sz.h/2-(nativeMerc(lat)-nativeMerc(nativeCenter.lat))*180*nativeYScale()};}  function nativeUnproject(x,y){var z=nativeScale(),sz=nativeSize();return {lng:Math.max(-180,Math.min(179.999,nativeCenter.lng+(x-sz.w/2)/z)),lat:nativeInvMerc(nativeMerc(nativeCenter.lat)-(y-sz.h/2)/(180*nativeYScale()))};}
   // Land validity comes from the same embedded raster that is displayed, not
   // an asynchronously downloaded GeoJSON that may be missing or misaligned.
   function nativeIsLand(lon,lat){
@@ -1996,7 +2036,8 @@ input::placeholder{color:var(--muted);opacity:.8}
     console.info('Xern: hidden '+components+' tiny island specks ('+removed+' raster pixels); ownership unchanged.');
   }
   function nativePlotIsLand(key){var c=landPlotCoords(key);return !!c&&nativeIsLand(landLon(c.x+.5),landLat(c.y+.5));}
-  function nativePlotIsSafe(key){var c=landPlotCoords(key);if(!c)return false;    var lon=landLon(c.x+.5),lat=landLat(c.y+.5);
+  function nativePlotIsSafe(key){var c=landPlotCoords(key);if(!c)return false;
+    var lon=landLon(c.x+.5),lat=landLat(c.y+.5);
     // Nine-point land check, including all four corners, to reject coastal/water-crossing cells.
     var xOffsets=[-.45,0,.45],yOffsets=[-.45,0,.45];
     for(var xi=0;xi<3;xi++)for(var yi=0;yi<3;yi++){
@@ -2954,8 +2995,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     }
     btn.disabled = true; say("Working…", true);
     try{
-      var res;
-      if(mode === "join"){
+      var res;      if(mode === "join"){
         res = await api("/auth/v1/signup", "POST", { email: email, password: pass, data: { username: user } });
         if(!res.ok){
           var t = errText(res.data);
@@ -2995,7 +3035,8 @@ input::placeholder{color:var(--muted);opacity:.8}
  var amount=document.getElementById('giftAmount');if(!amount)return;
  function update(){var raw=amount.value.trim();var valid=/^[0-9]+$/.test(raw);var n=valid?Number(raw):0;
  var fee=Number.isSafeInteger(n)&&n>0?Math.ceil(n*0.0005):0;
- var good=Number.isSafeInteger(n)&&n>0&&n<=1e12; document.getElementById('giftNet').textContent=good?n.toLocaleString()+' Xergs':'0 Xergs';
+ var good=Number.isSafeInteger(n)&&n>0&&n<=1e12;
+ document.getElementById('giftNet').textContent=good?n.toLocaleString()+' Xergs':'0 Xergs';
  document.getElementById('giftFee').textContent=good?fee.toLocaleString()+' Xergs':'0 Xergs';
  document.getElementById('giftTotal').textContent=good?(n+fee).toLocaleString()+' Xergs':'0 Xergs';
  document.getElementById('giftStatus').textContent=!good&&raw?'Enter a whole-number gift between 1 and 1 trillion Xergs.':'The transfer service is not yet enabled. This calculator does not move money.';
