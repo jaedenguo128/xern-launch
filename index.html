@@ -2489,23 +2489,61 @@ input::placeholder{color:var(--muted);opacity:.8}
       updateXergsDisplay(d.money);landRememberHomebase(chosen.properties.plot_key);landFirstPlot=null;landSecondPlot=null;landSelected=null;await landSyncClaims(false);landRefreshPanel();$('landMsg').textContent='🏰 Homebase established: 100,000 connected acres claimed. From now on, only your squad can expand your land.';
     }catch(e){$('landMsg').textContent='Could not complete the purchase. Check your connection and try again.';}finally{landRefreshPanel();landRenderGrid();}
   });
-  // Sale requests are authoritative server operations: never hide plots locally before success.
+  // Sell All is processed in background batches by Supabase; it continues after closing the tab.
+  var xernSalePoll=null;
+  async function xernWatchLandSale(){
+    var ss=landSession();if(!ss||!ss.access_token)return;
+    try{
+      var r=await api('/rest/v1/rpc/xern_sell_all_land_status','POST',{},ss.access_token),d=r.data||{};
+      if(!r.ok||!d.ok)return;
+      if(d.status==='running'){
+        $('warSellBtn').disabled=true;
+        $('warSellMsg').textContent='Selling all land automatically… '+Number(d.sold||0).toLocaleString()+' plots sold, '+Number(d.remaining||0).toLocaleString()+' remaining. You may close this page; selling continues on the server.';
+        if(!xernSalePoll)xernSalePoll=setInterval(xernWatchLandSale,3000);
+      }else if(d.status==='done'){
+        if(xernSalePoll){clearInterval(xernSalePoll);xernSalePoll=null;}
+        $('warSellBtn').disabled=false;
+        $('warSellMsg').textContent='Sell All complete! '+Number(d.sold||0).toLocaleString()+' plots sold for '+Number(d.proceeds||0).toLocaleString()+' Xergs.';
+        try{localStorage.removeItem(landHomebaseStorageKey());localStorage.removeItem('xern_spawn_points_'+String(landUserId||'guest'));}catch(e){}
+        landRallyLatLng=null;landFirstPlot=null;landSelected=null;
+        await landSyncClaims(false);landRenderGrid();
+      }else{
+        if(xernSalePoll){clearInterval(xernSalePoll);xernSalePoll=null;}
+        $('warSellBtn').disabled=false;
+      }
+    }catch(e){console.warn('Sell All status unavailable',e);}
+  }
   $('warSellBtn').addEventListener('click',async function(){
     var owned=landOwnedKeys(),choice=$('warSellPlots').value,amount=choice==='all'?owned.length:Number(choice),msg=$('warSellMsg');
     if(!owned.length){msg.textContent='You have no land to sell.';return;}
-    if(amount>owned.length){msg.textContent='You only own '+owned.length+' plots ('+(owned.length*5000).toLocaleString()+' acres).';return;}
-    var all=amount===owned.length;
-    if(!confirm('Sell '+(all?'ALL '+owned.length:amount)+' plots ('+(amount*5000).toLocaleString()+' acres) for '+Math.floor(amount*1.5)+' Xergs? This will change your territory on the server.'))return;
+    if(amount>owned.length){msg.textContent='You only own '+owned.length+' plots.';return;}
+    var all=choice==='all'||amount===owned.length;
+    if(!confirm('Sell '+(all?'ALL '+owned.length:amount)+' plots ('+(amount*5000).toLocaleString()+' acres) for approximately '+Math.floor(amount*1.5)+' Xergs?'))return;
     var session=landSession();if(!session||!session.access_token){msg.textContent='Please log in again.';return;}
-    var btn=$('warSellBtn');btn.disabled=true;msg.textContent='Submitting sale to the server…';
+    var btn=$('warSellBtn');btn.disabled=true;msg.textContent=all?'Starting automatic Sell All…':'Submitting sale…';
     try{
-      var result=await api('/rest/v1/rpc/warfare_sell_plots','POST',{p_count:all?null:amount},session.access_token),data=result.data||{};
-      if(!result.ok||!data.ok){msg.textContent='Sale was not completed: '+(data.error||data.message||('HTTP '+result.status))+'. If partial sale cannot find an edge, choose All my land only if you want a complete reset.';return;}
-      if(data.money!=null)updateXergsDisplay(data.money);
-      if(all){try{localStorage.removeItem(landHomebaseStorageKey());localStorage.removeItem('xern_spawn_points_'+String(landUserId||'guest'));}catch(e){}landRallyLatLng=null;landFirstPlot=null;landSelected=null;}
-      await landSyncClaims(false);landRenderGrid();msg.textContent='Sale confirmed. '+data.sold_squares+' plots sold ('+(data.acres_sold||data.sold_squares*5000).toLocaleString()+' acres) for '+(data.proceeds||0)+' Xergs.';
-    }catch(e){msg.textContent='Sale failed: could not reach the backend.';}finally{btn.disabled=false;}
+      if(all){
+        var r=await api('/rest/v1/rpc/xern_start_sell_all_land','POST',{},session.access_token),d=r.data||{};
+        if(!r.ok||!d.ok){msg.textContent='Could not start Sell All: '+(d.error||d.message||r.status);btn.disabled=false;return;}
+        msg.textContent='Sell All started. The server will sell every plot automatically, in batches of 200.';
+        await xernWatchLandSale();return;
+      }
+      var remaining=amount,sold=0,earned=0;
+      while(remaining>0){
+        var requestCount=Math.min(remaining,200);
+        var result=await api('/rest/v1/rpc/warfare_sell_plots','POST',{p_count:requestCount},session.access_token),data=result.data||{};
+        if(!result.ok||!data.ok){msg.textContent='Sold '+sold+' plots, then stopped: '+(data.error||data.message||result.status);break;}
+        var batch=Number(data.sold_squares||0);if(batch<=0)break;
+        sold+=batch;earned+=Number(data.proceeds||0);remaining-=batch;
+        if(data.money!=null)updateXergsDisplay(data.money);
+        msg.textContent='Selling… '+sold+' of '+amount+' plots sold.';
+        if(batch<requestCount)break;
+      }
+      await landSyncClaims(false);landRenderGrid();
+      if(!remaining)msg.textContent='Sale confirmed: '+sold+' plots sold for '+earned+' Xergs.';
+    }catch(e){msg.textContent='Sale interrupted: '+e.message;}finally{if(!all)btn.disabled=false;}
   });
+  setTimeout(xernWatchLandSale,2500);
   var originalShowApp=showApp;
   showApp=function(name,money){ landOwnerName=String(name||"commander"); originalShowApp(name,money); landUserId=landJwtUserId(); landRefreshPanel(); if(landMapReady)landRenderGrid(); };
 
@@ -2958,30 +2996,3 @@ input::placeholder{color:var(--muted);opacity:.8}
  function update(){var raw=amount.value.trim();var valid=/^[0-9]+$/.test(raw);var n=valid?Number(raw):0;
  var fee=Number.isSafeInteger(n)&&n>0?Math.ceil(n*0.0005):0;
  var good=Number.isSafeInteger(n)&&n>0&&n<=1e12;
- document.getElementById('giftNet').textContent=good?n.toLocaleString()+' Xergs':'0 Xergs';
- document.getElementById('giftFee').textContent=good?fee.toLocaleString()+' Xergs':'0 Xergs';
- document.getElementById('giftTotal').textContent=good?(n+fee).toLocaleString()+' Xergs':'0 Xergs';
- document.getElementById('giftStatus').textContent=!good&&raw?'Enter a whole-number gift between 1 and 1 trillion Xergs.':'The transfer service is not yet enabled. This calculator does not move money.';
- }
- amount.addEventListener('input',update);update();
-})();
-</script>
-<style>
-#xernWeekendNotice{position:relative;z-index:2;max-width:1050px;margin:10px auto;padding:11px 15px;border:1px solid #607a9b;border-radius:10px;background:#14253b;color:#e5efff;font:600 14px system-ui,sans-serif;text-align:center}
-#xernWeekendNotice strong{color:#facc15}
-</style>
-<div id="xernWeekendNotice" role="status" aria-live="polite">Loading clan warfare rules…</div>
-<script>
-(function(){
- function updateXernWeekendRules(){
-  var now=new Date(),day=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short'}).format(now),weekend=day==='Sat'||day==='Sun';
-  var el=document.getElementById('xernWeekendNotice');if(!el)return;
-  el.innerHTML=weekend
-   ? '<strong>⚔ WEEKEND SOLO WARFARE</strong> — Clan support is OFF. Fight and expand with your own troops. You may attack clanmates. Sunday 12:00 AM Eastern: weekly clan prize.'
-   : '<strong>🛡 WEEKDAY CLAN ALLIANCES</strong> — Connected clan support is ON. Friendly attacks are blocked. Weekend solo warfare starts Saturday 12:00 AM Eastern.';
- }
- updateXernWeekendRules();setInterval(updateXernWeekendRules,60000);
-})();
-</script>
-</body>
-</html>
