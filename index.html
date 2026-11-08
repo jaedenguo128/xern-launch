@@ -1240,7 +1240,13 @@ input::placeholder{color:var(--muted);opacity:.8}
       if(refreshed)token=refreshed.access_token;
     }
     async function send(authToken){
-      var response=await fetch(URL_BASE+path,{method:method,headers:headers(authToken),body:body?JSON.stringify(body):undefined});
+      // A stalled backend must not leave the login screen stuck on "Working…".
+      var controller=new AbortController();
+      var timeout=setTimeout(function(){controller.abort();},15000);
+      var response;
+      try{response=await fetch(URL_BASE+path,{method:method,headers:headers(authToken),body:body?JSON.stringify(body):undefined,signal:controller.signal});}
+      catch(e){if(e&&e.name==='AbortError')throw new Error('Server timed out after 15 seconds. Supabase may be overloaded. Please try again shortly.');throw e;}
+      finally{clearTimeout(timeout);}
       var data=null;try{data=await response.json();}catch(e){}
       return {ok:response.ok,status:response.status,data:data||{}};
     }
@@ -3236,7 +3242,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       } else {
         res = await api("/auth/v1/token?grant_type=password", "POST", { email: email, password: pass });
         if(!res.ok){
-          return fail(/confirm/i.test(errText(res.data)) ? "Supabase still requires email confirmation. Turn off “Confirm email” in your Supabase settings." : "Username or password is incorrect.");
+          return fail(res.status===429 ? "Too many login attempts. Wait a minute and retry." : res.status>=500 ? "Login server is temporarily unavailable (HTTP "+res.status+"). Try again shortly." : /confirm/i.test(errText(res.data)) ? "Supabase requires email confirmation." : res.status===400||res.status===401 ? "Username or password is incorrect." : "Login failed (HTTP "+res.status+"): "+(errText(res.data)||"Please retry."));
         }
       }
       saveSession({ access_token: res.data.access_token, refresh_token: res.data.refresh_token });
