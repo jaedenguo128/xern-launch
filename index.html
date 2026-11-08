@@ -2766,7 +2766,30 @@ input::placeholder{color:var(--muted);opacity:.8}
     var session=landSession();if(!session||!session.access_token){msg.textContent='Please log in again.';return;}
     var btn=$('warSellBtn');btn.disabled=true;msg.textContent='Submitting sale to the server…';
     try{
-      var result=await api('/rest/v1/rpc/warfare_sell_plots','POST',{p_count:all?null:amount},session.access_token),data=result.data||{};
+      if(all){
+        var queued=await api('/rest/v1/rpc/xern_start_sell_all_land','POST',{},session.access_token),q=queued.data||{};
+        if(!queued.ok||!q.ok){msg.textContent='Could not start land sale: '+(q.error||q.message||('HTTP '+queued.status));return;}
+        msg.textContent='Selling all land in the background. This may take a few minutes; you can keep playing.';
+        var attempts=0;
+        var watch=setInterval(async function(){
+          try{
+            var st=await api('/rest/v1/rpc/xern_sell_all_land_status','POST',{},session.access_token),d=st.data||{};
+            if(!st.ok||!d.ok){clearInterval(watch);msg.textContent='Sale status unavailable. Refresh to check your remaining land.';return;}
+            msg.textContent='Land sale: '+Number(d.sold||0).toLocaleString()+' plots sold; '+Number(d.remaining||0).toLocaleString()+' remaining.';
+            if(d.status==='done'||d.status==='failed'||++attempts>=180){
+              clearInterval(watch);
+              if(d.status==='done'){
+                try{localStorage.removeItem(landHomebaseStorageKey());localStorage.removeItem('xern_spawn_points_'+String(landUserId||'guest'));}catch(e){}
+                landRallyLatLng=null;landFirstPlot=null;landSelected=null;
+                msg.textContent='All-land sale complete: '+Number(d.sold||0).toLocaleString()+' plots sold for '+Number(d.proceeds||0).toLocaleString()+' Xergs.';
+              }else msg.textContent='Sale status: '+d.status+'. Refresh the page to check.';
+              await landSyncClaims(false);landRenderGrid();
+            }
+          }catch(e){clearInterval(watch);msg.textContent='Sale continues on server; status check failed. Refresh later.';}
+        },3000);
+        return;
+      }
+      var result=await api('/rest/v1/rpc/warfare_sell_plots','POST',{p_count:amount},session.access_token),data=result.data||{};
       if(!result.ok||!data.ok){msg.textContent='Sale was not completed: '+(data.error||data.message||('HTTP '+result.status))+'. If partial sale cannot find an edge, choose All my land only if you want a complete reset.';return;}
       if(data.money!=null)updateXergsDisplay(data.money);
       if(all){try{localStorage.removeItem(landHomebaseStorageKey());localStorage.removeItem('xern_spawn_points_'+String(landUserId||'guest'));}catch(e){}landRallyLatLng=null;landFirstPlot=null;landSelected=null;}
