@@ -698,6 +698,15 @@ input::placeholder{color:var(--muted);opacity:.8}
 @media(max-width:760px){.home-wealth-layout{grid-template-columns:1fr}.xern-home-announcements{grid-column:1;grid-row:auto}.home-main{grid-column:1;grid-row:auto}}
 </style>
 <!-- Cloudflare Web Analytics -->
+<style>
+.nav,.stk-list,.stk-main,.land-panel,.land-layout>*{min-width:0}
+@media(max-width:760px){
+  .bar{flex-wrap:wrap;gap:8px}
+  .nav{flex:0 0 100%;max-width:100%}
+  .stk,.land-layout{grid-template-columns:minmax(0,1fr)}
+  .land-select{max-width:100%}
+}
+</style>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "6842c2906ba74d32909b83f3322029b9"}'></script>
 <!-- End Cloudflare Web Analytics -->
 </head>
@@ -1206,63 +1215,87 @@ input::placeholder{color:var(--muted);opacity:.8}
     if(token) h["Authorization"] = "Bearer " + token;
     return h;
   }
-  // Keep Supabase sessions alive while the game remains open. All authenticated
-  // requests share one refresh operation to avoid rotating a refresh token twice.
   var sessionRefreshPromise = null;
+  var sessionGeneration = 0;
+  function tokenClaims(token){
+    try{
+      return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    }catch(e){return {};}
+  }
   function tokenExpiresSoon(token){
-    try{var payload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));return !payload.exp||payload.exp*1000<Date.now()+90000;}
-    catch(e){return false;}
+    var expires=tokenClaims(token).exp;
+    return expires && expires*1000<Date.now()+90000;
+  }
+  function errText(d){ return (d && (d.msg || d.message || d.error_description || d.error)) || ""; }
+  async function request(path, method, body, token){
+    var controller=new AbortController();
+    var timeout=setTimeout(function(){controller.abort();},15000);
+    try{
+      var response=await fetch(URL_BASE+path,{
+        method:method,headers:headers(token),body:body==null?undefined:JSON.stringify(body),signal:controller.signal
+      });
+      var raw=await response.text(), data={};
+      if(raw){
+        try{data=JSON.parse(raw)||{};}
+        catch(e){if(response.ok)throw new Error('The server returned an unreadable response.');}
+      }
+      return {ok:response.ok,status:response.status,data:data};
+    }catch(e){
+      if(controller.signal.aborted)throw new Error('The game server timed out. Check your connection and try again.');
+      throw e;
+    }finally{clearTimeout(timeout);}
   }
   async function refreshGameSession(){
     if(sessionRefreshPromise)return sessionRefreshPromise;
-    var currentSession=loadSession();
-    if(!currentSession||!currentSession.refresh_token)return null;
+    var session=loadSession();
+    if(!session||!session.refresh_token)return null;
     sessionRefreshPromise=(async function(){
-      try{
-        var response=await fetch(URL_BASE+'/auth/v1/token?grant_type=refresh_token',{
-          method:'POST',headers:headers(),body:JSON.stringify({refresh_token:currentSession.refresh_token})
-        });
-        var data=await response.json();
-        if(!response.ok||!data.access_token)return null;
-        var updated={access_token:data.access_token,refresh_token:data.refresh_token||currentSession.refresh_token};
+      var result=await request('/auth/v1/token?grant_type=refresh_token','POST',{refresh_token:session.refresh_token});
+      if(loadSession()!==session)return null;
+      if(result.ok&&result.data.access_token){
+        var updated={access_token:result.data.access_token,refresh_token:result.data.refresh_token||session.refresh_token};
         saveSession(updated);
         return updated;
-      }catch(e){return null;}
+      }
+      var code=result.data.error_code||result.data.code;
+      if(result.status===401||['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired'].includes(code)){
+        showLogin('Your login expired. Please sign in again.');
+        return null;
+      }
+      throw new Error('Session refresh unavailable (HTTP '+result.status+'). Try again shortly.');
     })();
     try{return await sessionRefreshPromise;}finally{sessionRefreshPromise=null;}
   }
   async function api(path, method, body, token){
-    var isRefresh=path.indexOf('/auth/v1/token')===0;
-    var activeSession=loadSession();
-    var authenticated=!!(token&&activeSession&&activeSession.access_token);
-    if(authenticated&&tokenExpiresSoon(activeSession.access_token)&&!isRefresh){
+    if(!token)return request(path,method,body);
+    var session=loadSession(), generation=sessionGeneration;
+    function checkSession(){
+      if(generation!==sessionGeneration||!loadSession())throw new Error('Your session ended. Please sign in again.');
+    }
+    checkSession();
+    if(tokenClaims(token).sub!==tokenClaims(session.access_token).sub)throw new Error("Your session changed. Please retry.");
+    token=session.access_token;
+    if(tokenExpiresSoon(token)){
       var refreshed=await refreshGameSession();
+      checkSession();
       if(refreshed)token=refreshed.access_token;
     }
-    async function send(authToken){
-      // A stalled backend must not leave the login screen stuck on "Working…".
-      var controller=new AbortController();
-      var timeout=setTimeout(function(){controller.abort();},15000);
-      var response;
-      try{response=await fetch(URL_BASE+path,{method:method,headers:headers(authToken),body:body?JSON.stringify(body):undefined,signal:controller.signal});}
-      catch(e){if(e&&e.name==='AbortError')throw new Error('Server timed out after 15 seconds. Supabase may be overloaded. Please try again shortly.');throw e;}
-      finally{clearTimeout(timeout);}
-      var data=null;try{data=await response.json();}catch(e){}
-      return {ok:response.ok,status:response.status,data:data||{}};
-    }
-    var result=await send(token);
-    var expired=result.status===401||((result.status===403||result.status===400)&&/jwt expired|invalid jwt|token.*expired/i.test(JSON.stringify(result.data)));
-    if(authenticated&&!isRefresh&&expired){
+    var result=await request(path,method,body,token);
+    checkSession();
+    var expired=result.status===401||(result.status===403&&/jwt expired|invalid jwt|token.*expired/i.test(errText(result.data)));
+    if(expired){
       var latest=loadSession();
-      var renewed=(latest&&latest.access_token!==token)?latest:await refreshGameSession();
-      if(renewed&&renewed.access_token)result=await send(renewed.access_token);
-      else result.data=Object.assign({},result.data,{message:'Your login expired. Please sign in again to continue.'});
+      var renewed=latest.access_token!==token?latest:await refreshGameSession();
+      checkSession();
+      if(renewed)result=await request(path,method,body,renewed.access_token);
+      checkSession();
     }
     return result;
   }
-  // Refresh quietly before the JWT expires, including while the Warfare map is open.
-  setInterval(function(){var s=loadSession();if(s&&s.refresh_token&&tokenExpiresSoon(s.access_token))refreshGameSession();},45000);
-  function errText(d){ return (d && (d.msg || d.message || d.error_description || d.error)) || ""; }
+  setInterval(function(){
+    var s=loadSession();
+    if(!document.hidden&&s&&s.refresh_token&&tokenExpiresSoon(s.access_token))refreshGameSession().catch(function(){});
+  },45000);
 
   /* ------------------- BALANCE (the real number lives in Supabase) ------------------- */
   var userXergs = 0;
@@ -1331,20 +1364,26 @@ input::placeholder{color:var(--muted);opacity:.8}
   async function resync(){
     var s = loadSession();
     if(!s || !s.access_token) return;
-    var p = await api("/rest/v1/profiles?select=money,gold,team_buff_expires_at", "GET", null, s.access_token);
+    var p = await fetchProfile(s,"money,gold,team_buff_expires_at");
     if(p.ok && Array.isArray(p.data) && p.data[0]) { updateXergsDisplay(p.data[0].money); updateGoldDisplay(p.data[0].gold); updateBoostStatus(p.data[0].team_buff_expires_at); }
   }
   // Results are sent one at a time so quick back-to-back rounds can't overwrite each other.
   var settleQueue = Promise.resolve();
   function settle(game, bet, payout){
+    var generation=sessionGeneration;
     settleQueue = settleQueue.then(async function(){
-      var s = loadSession();
-      if(!s || !s.access_token) return;
+      var s=loadSession();
+      if(!s||generation!==sessionGeneration)return;
+      var message;
       try{
-        var r = await api("/rest/v1/rpc/casino_round", "POST", { p_game: game, p_bet: bet, p_payout: payout }, s.access_token);
-        if(r.ok && r.data && r.data.ok) updateXergsDisplay(r.data.money);
-        else await resync();
-      }catch(e){ try{ await resync(); }catch(e2){} }
+        var r=await api("/rest/v1/rpc/casino_round","POST",{p_game:game,p_bet:bet,p_payout:payout},s.access_token);
+        if(r.ok&&r.data.ok){updateXergsDisplay(r.data.money);return;}
+        message="Round rejected: "+(errText(r.data)||("HTTP "+r.status));
+      }catch(e){message="The server could not confirm this round. Check your balance before playing again.";}
+      if(generation!==sessionGeneration)return;
+      var status=$(({mines:"bomb",blackjack:"bj"}[game]||game)+"-msg");
+      status.className="msg"; status.textContent=message;
+      try{await resync();}catch(e){}
     });
     return settleQueue;
   }
@@ -1362,8 +1401,10 @@ input::placeholder{color:var(--muted);opacity:.8}
     say("", false);
   }
 
-  async function fetchProfile(session){
-    return api("/rest/v1/profiles?select=username,money", "GET", null, session.access_token);
+  async function fetchProfile(session,columns){
+    var id=tokenClaims(session.access_token).sub;
+    if(!id)throw new Error('The session is missing a player ID.');
+    return api("/rest/v1/profiles?select="+columns+"&id=eq."+encodeURIComponent(id), "GET", null, session.access_token);
   }
 
   // Casino Sub-Nav Switching
@@ -1435,9 +1476,9 @@ input::placeholder{color:var(--muted);opacity:.8}
 
   if ($("plinko-drop")) {
     $("plinko-drop").onclick = function() {
-      var bet = parseInt($("plinko-bet").value) || 0;
+      var bet = Number($("plinko-bet").value);
       var bal = getBalance();
-      if (bet <= 0 || bet > bal) {
+      if (!Number.isSafeInteger(bet) || bet <= 0 || bet > bal) {
         if ($("plinko-msg")) { $("plinko-msg").className = "msg"; $("plinko-msg").textContent = "Invalid bet or insufficient Xergs!"; }
         return;
       }
@@ -1447,7 +1488,9 @@ input::placeholder{color:var(--muted);opacity:.8}
       $("plinko-drop").disabled = true;
 
       var ball = { x: 260 + (Math.random() - 0.5) * 4, y: 12, vx: 0, vy: 2 };
+      var generation=sessionGeneration;
       var anim = setInterval(function() {
+        if(generation!==sessionGeneration){clearInterval(anim);return;}
         ball.y += ball.vy;
         ball.x += ball.vx;
         ball.vy += 0.22;
@@ -1500,9 +1543,9 @@ input::placeholder{color:var(--muted);opacity:.8}
 
   if ($("bomb-start")) {
     $("bomb-start").onclick = function() {
-      bBet = parseInt($("bomb-bet").value) || 0;
+      bBet = Number($("bomb-bet").value);
       var bal = getBalance();
-      if (bBet <= 0 || bBet > bal) {
+      if (!Number.isSafeInteger(bBet) || bBet <= 0 || bBet > bal) {
         if ($("bomb-msg")) { $("bomb-msg").className = "msg"; $("bomb-msg").textContent = "Invalid bet or insufficient Xergs!"; }
         return;
       }
@@ -1578,9 +1621,9 @@ input::placeholder{color:var(--muted);opacity:.8}
 
   if ($("dice-roll")) {
     $("dice-roll").onclick = function() {
-      var bet = parseInt($("dice-bet").value) || 0;
+      var bet = Number($("dice-bet").value);
       var bal = getBalance();
-      if (bet <= 0 || bet > bal) {
+      if (!Number.isSafeInteger(bet) || bet <= 0 || bet > bal) {
         if ($("dice-msg")) { $("dice-msg").className = "msg"; $("dice-msg").textContent = "Invalid bet or insufficient Xergs!"; }
         return;
       }
@@ -1624,7 +1667,10 @@ input::placeholder{color:var(--muted);opacity:.8}
         bjDeck.push({ suit: s, val: v, weight: weight });
       });
     });
-    bjDeck.sort(function() { return Math.random() - 0.5; });
+    for(var i=bjDeck.length-1;i>0;i--){
+      var j=Math.floor(Math.random()*(i+1));
+      [bjDeck[i],bjDeck[j]]=[bjDeck[j],bjDeck[i]];
+    }
   }
 
   function getHandScore(hand) {
@@ -1652,9 +1698,9 @@ input::placeholder{color:var(--muted);opacity:.8}
 
   if ($("bj-deal")) {
     $("bj-deal").onclick = function() {
-      bjBet = parseInt($("bj-bet").value) || 0;
+      bjBet = Number($("bj-bet").value);
       var bal = getBalance();
-      if (bjBet <= 0 || bjBet > bal) {
+      if (!Number.isSafeInteger(bjBet) || bjBet <= 0 || bjBet > bal) {
         if ($("bj-msg")) { $("bj-msg").className = "msg"; $("bj-msg").textContent = "Invalid bet or insufficient Xergs!"; }
         return;
       }
@@ -1787,6 +1833,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   /* ------------------- STOCK MARKET ------------------- */
   var ORDER = ["XERG","FERN","BTC","AMMO","XPPL","TXLA","NVDX","MXDF","SPCX","R6S","BMH","FRNW","XIKY","STBX","MCX"];
   var stk = { rows: [], sel: "XERG", hold: {}, cost: {}, timer: null };
+  var stockRefreshPending=null, stockTrading=false, stockChartRequest=0;
   function fm(n, d){ return Number(n).toLocaleString(undefined, { maximumFractionDigits: d === undefined ? 2 : d }); }
   function stkNote(t, bad){ var m = $("stkMsg"); m.className = bad ? "giftmsg bad" : "giftmsg"; m.textContent = t; }
   function curStock(){
@@ -1796,11 +1843,9 @@ input::placeholder{color:var(--muted);opacity:.8}
   function stkEst(){
     var buy=Number($("buyAmt").value), sell=Number($("sellAmt").value), c=curStock();
     if(!c){$("buyEst").textContent="";$("sellEst").textContent="";return;}
-    var price=Number(c.price), depth=Math.max(1,Number(c.depth)||1), held=Number(stk.hold[c.symbol]||0);
-    var bi=Math.min(.02,buy*price/Math.max(1000000,depth*400),1/Math.max(price,.0001));
-    var si=Math.min(.02,sell*price/Math.max(1000000,depth*400),1/Math.max(price,.0001));
-    $("buyEst").textContent=Number.isInteger(buy)&&buy>0 ? "Estimated cost: "+fm(Math.round(buy*price))+" Xergs · "+fm(buy,0)+" whole shares" : (buy>0?"Enter a whole number of shares.":"");
-    $("sellEst").textContent=Number.isInteger(sell)&&sell>0 ? "Estimated proceeds: "+fm(Math.round(Math.min(sell,held)*price))+" Xergs"+(sell>Math.floor(held)&&!(held<1&&sell===1)?" · not enough shares":"") : (sell>0?"Enter a whole number of shares.":"");
+    var price=Number(c.price), held=Number(stk.hold[c.symbol]||0);
+    $("buyEst").textContent=Number.isSafeInteger(buy)&&buy>0 ? "Estimated cost: "+fm(Math.round(buy*price))+" Xergs · "+fm(buy,0)+" whole shares" : (buy>0?"Enter a whole number of shares.":"");
+    $("sellEst").textContent=Number.isSafeInteger(sell)&&sell>0 ? "Estimated proceeds: "+fm(Math.round(Math.min(sell,held)*price))+" Xergs"+(sell>Math.floor(held)&&!(held>0&&held<1&&sell===1)?" · not enough shares":"") : (sell>0?"Enter a whole number of shares.":"");
   }
   function stkRenderList(){
     var html = "";
@@ -1808,11 +1853,13 @@ input::placeholder{color:var(--muted);opacity:.8}
     stk.rows.forEach(function(r){
       var own = stk.hold[r.symbol] || 0;
       var ch = r.price_24h ? (Number(r.price) / Number(r.price_24h) - 1) * 100 : 0;
-      html += '<button class="stk-item" data-sym="' + r.symbol + '" aria-pressed="' + (r.symbol === stk.sel) + '">' +
-        '<span><b>' + r.symbol + '</b><small>' + r.name + (own > 0 ? ' · you own ' + fm(own, 4) : '') + '</small></span>' +
+      html += '<button class="stk-item" data-sym="' + teamEsc(r.symbol) + '" aria-pressed="' + (r.symbol === stk.sel) + '">' +
+        '<span><b>' + teamEsc(r.symbol) + '</b><small>' + teamEsc(r.name) + (own > 0 ? ' · you own ' + fm(own, 4) : '') + '</small></span>' +
         '<span class="r"><b>' + fm(r.price) + '</b><small class="' + (ch >= 0 ? "up" : "down") + '">' + (ch >= 0 ? "+" : "") + ch.toFixed(2) + '%</small></span></button>';
     });
-    $("stkList").innerHTML = html;
+    var list=$("stkList"), scroll=list.scrollLeft;
+    list.innerHTML=html;
+    list.scrollLeft=scroll;
     var tSpent = 0, tWorth = 0, owned = 0;
     stk.rows.forEach(function(r){
       var sh = stk.hold[r.symbol] || 0;
@@ -1848,25 +1895,46 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   async function stkLoadChart(){
     var s = loadSession(); if(!s || !s.access_token) return;
-    var r = await api("/rest/v1/stock_history?symbol=eq." + stk.sel + "&select=price&order=created_at.desc&limit=120", "GET", null, s.access_token);
-    if(r.ok && Array.isArray(r.data)) drawChart(r.data.map(function(x){ return Number(x.price); }).reverse());
+    var chartRequest=++stockChartRequest;
+    var r = await api("/rest/v1/stock_history?symbol=eq." + encodeURIComponent(stk.sel) + "&select=price&order=created_at.desc&limit=120", "GET", null, s.access_token);
+    if(chartRequest===stockChartRequest&&r.ok&&Array.isArray(r.data)){
+      drawChart(r.data.map(function(x){return Number(x.price);}).filter(Number.isFinite).reverse());
+    }
   }
-  async function stkRefresh(){
+  function stkRefresh(){
+    if(!stockRefreshPending){
+      stockRefreshPending=stkRefreshData().catch(function(){
+        if(loadSession())stkNote("Market data could not refresh. Please try again shortly.",true);
+      }).finally(function(){stockRefreshPending=null;});
+    }
+    return stockRefreshPending;
+  }
+  async function stkRefreshData(){
     var s = loadSession(); if(!s || !s.access_token) return;
-    var q = await api("/rest/v1/stock_quotes?select=symbol,name,price,base_price,depth,price_24h", "GET", null, s.access_token);
-    if(q.ok && Array.isArray(q.data)) stk.rows = q.data;
-    var dividends = await api("/rest/v1/rpc/stock_claim_dividends", "POST", {}, s.access_token);
-    if(dividends.ok && dividends.data && dividends.data.ok){
+    var generation=sessionGeneration;
+    var results=await Promise.allSettled([
+      api("/rest/v1/stock_quotes?select=symbol,name,price,base_price,depth,price_24h","GET",null,s.access_token),
+      api("/rest/v1/holdings?select=symbol,shares,cost","GET",null,s.access_token),
+      api("/rest/v1/rpc/stock_claim_dividends","POST",{},s.access_token)
+    ]);
+    if(generation!==sessionGeneration)return;
+    var q=results[0].value, h=results[1].value, dividends=results[2].value;
+    if(q&&q.ok&&Array.isArray(q.data)){
+      stk.rows=q.data;
+      if(!curStock()&&stk.rows.length)stk.sel=stk.rows[0].symbol;
+    }
+    if(h&&h.ok&&Array.isArray(h.data)){
+      stk.hold={}; stk.cost={};
+      h.data.forEach(function(r){stk.hold[r.symbol]=Number(r.shares);stk.cost[r.symbol]=Number(r.cost||0);});
+    }
+    if(dividends&&dividends.ok&&dividends.data.ok){
       var paid=Number(dividends.data.paid||0);
-      $("stockDividendStatus").textContent = paid>0 ? "Daily dividends collected: +"+fm(paid)+" Xergs!" : "Daily dividends: up to date · 0.5% of stock value per day";
-      if(paid>0) updateXergsDisplay(dividends.data.money);
-    } else { $("stockDividendStatus").textContent="Daily dividends temporarily unavailable."; }
-    var h = await api("/rest/v1/holdings?select=symbol,shares,cost", "GET", null, s.access_token);
-    stk.hold = {}; stk.cost = {};
-    if(h.ok && Array.isArray(h.data)) h.data.forEach(function(r){ stk.hold[r.symbol] = Number(r.shares); stk.cost[r.symbol] = Number(r.cost || 0); });
+      $("stockDividendStatus").textContent=paid>0?"Daily dividends collected: +"+fm(paid)+" Xergs!":"Daily dividends: up to date · 0.5% of stock value per day";
+      if(paid>0)updateXergsDisplay(dividends.data.money);
+    }else $("stockDividendStatus").textContent="Daily dividends temporarily unavailable.";
     stkRenderList();
-    await stkRefreshDividendHistory(s.access_token);
-    await stkLoadChart();
+    await Promise.allSettled([stkRefreshDividendHistory(s.access_token),stkLoadChart()]);
+    if(!q||!q.ok||!h||!h.ok)throw new Error('Stock quotes or holdings are unavailable.');
   }
   async function stkRefreshDividendHistory(token){
     var today=new Date();var start=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate()-1));
@@ -1881,17 +1949,21 @@ input::placeholder{color:var(--muted);opacity:.8}
     }catch(e){$('stkYesterdayDividends').textContent='Unavailable';}
   }
   function stkOpen(){
-    stkRefresh().catch(function(){});
+    if(!stockTrading)stkRefresh();
     if(!stk.timer) stk.timer = setInterval(function(){
-      if(!$("page-stocks").hidden) stkRefresh().catch(function(){});
+      if(!document.hidden&&!$("page-stocks").hidden&&!stockTrading)stkRefresh();
     }, 20000);
   }
   async function stkTrade(side){
-    var c = curStock(), s = loadSession(); if(!c || !s || !s.access_token) return;
+    var c = curStock(), s = loadSession(); if(stockTrading||!c||!s||!s.access_token)return;
     var amt = Number(side === "buy" ? $("buyAmt").value : $("sellAmt").value);
     if(!(amt > 0) || !Number.isSafeInteger(amt)) return stkNote("Enter a positive whole number of shares (1, 2, 3...).", true);
+    var generation=sessionGeneration;
+    stockTrading=true;
     $("buyBtn").disabled = true; $("sellBtn").disabled = true; stkNote("");
     try{
+      if(stockRefreshPending)await stockRefreshPending;
+      if(generation!==sessionGeneration)return;
       var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt }, s.access_token);
       var d = r.data || {};
       if(r.ok && d.ok){
@@ -1903,20 +1975,22 @@ input::placeholder{color:var(--muted);opacity:.8}
       } else if(d.error === "too_small"){
         stkNote("That amount is too small.", true);
       } else {
-        stkNote(side === "buy" ? "Not enough Xergs to buy that many shares." : "Not enough shares. Use Max to sell all available shares.", true);
+        stkNote("Trade rejected: "+(errText(d)||("HTTP "+r.status)),true);
       }
     }catch(e){
-      stkNote("Couldn’t reach the server. Try again.", true);
+      if(generation===sessionGeneration)stkNote("Trade outcome could not be confirmed. Check your holdings before retrying.",true);
+    }finally{
+      if(generation===sessionGeneration)await stkRefresh();
+      stockTrading=false;
+      $("buyBtn").disabled=false; $("sellBtn").disabled=false;
     }
-    $("buyBtn").disabled = false; $("sellBtn").disabled = false;
-    try{ await stkRefresh(); }catch(e){}
   }
   $("stkList").addEventListener("click", function(e){
     var b = e.target.closest ? e.target.closest("button") : null;
-    if(!b) return;
+    if(!b||stockTrading)return;
     stk.sel = b.getAttribute("data-sym");
     $("buyAmt").value = ""; $("sellAmt").value = ""; stkNote("");
-    stkRenderList(); stkLoadChart().catch(function(){});
+    drawChart([]); stkRenderList(); stkLoadChart().catch(function(){});
   });
   $("buyAmt").oninput = stkEst; $("sellAmt").oninput = stkEst;
   $("sellMax").onclick = function(){ var c = curStock(); if(!c){$("sellAmt").value="";return;} var held=Number(stk.hold[c.symbol]||0); $("sellAmt").value=held>0?Math.max(1,Math.floor(held)):0; stkEst(); };
@@ -2078,8 +2152,8 @@ input::placeholder{color:var(--muted);opacity:.8}
   setInterval(function(){if($('page-airdrops')&&!$('page-airdrops').hidden)paintAirdropCooldowns();},1000);
 
   var landMap=null, landGeoLayer=null, landPlotLayer=null, landGridCanvas=null, landGridCtx=null, landVisibleFeatures=[], landSelected=null, landFirstPlot=null, landSecondPlot=null, landMapReady=false, landMapLoading=false, landGridRendering=false, landGridRenderTimer=null, landLastGridView="";
-  var landClaimsRefreshInFlight=null, landClaimsLastApplied=0;
-  var landFeatures=[], landCountryBounds=[], landOwnerName="commander", landUserId=null, landHoldings={}, landRallyMode=false, landTool='inspect', landRallyLatLng=null, landUnitCommands={};
+  var landClaimsRefreshInFlight=null, landClaimsLastApplied=0, landBuyPending=false;
+  var landFeatures=[], landCountryBounds=[], landOwnerName="commander", landUserId=null, landHoldings={}, landTool='inspect', landRallyLatLng=null, landUnitCommands={};
   /* Equal-area latitude rows: 8897 x 2832 gives ~5002.3 geographical acres per plot on a spherical Earth; game economy rounds to 5000. */ var LAND_STEP=360/8897, LAND_X_COUNT=8897, LAND_Y_COUNT=2832, LAND_BUY_PRICE=100, landRallyMarkers=null, landRallyMarkerRecords=[], landPickedMarker=null, landRallyPointMarker=null, landHomebaseMarker=null;
   function landHomebaseStorageKey(){return 'xern_homebase_'+String(landUserId||'guest');}
   function landHomebaseKey(){try{return localStorage.getItem(landHomebaseStorageKey())||'';}catch(e){return '';}}
@@ -2087,7 +2161,11 @@ input::placeholder{color:var(--muted);opacity:.8}
   function landRememberHomebase(key){try{if(key)localStorage.setItem(landHomebaseStorageKey(),key);}catch(e){}}
   function landHomebaseLatLng(){var c=landPlotCoords(landHomebaseKey());return c?[landLat(c.y+.5),landLon(c.x+.5)]:null;}
   function landSession(){return loadSession();}
-  function landJwtUserId(){var s=landSession();if(!s||!s.access_token)return null;try{var part=s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(part)).sub||null;}catch(e){return null;}}
+  function landJwtUserId(){var s=landSession();return s?tokenClaims(s.access_token).sub||null:null;}
+  async function refreshClaimsAfterTrade(){
+    if(landClaimsRefreshInFlight)await landClaimsRefreshInFlight;
+    return landSyncClaims(false);
+  }
   async function landSyncClaims(showMessage){
     // Serialize refreshes: a slow older response must never restore eliminated owners.
     if(landClaimsRefreshInFlight)return landClaimsRefreshInFlight;
@@ -2103,13 +2181,14 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   async function landSyncClaimsFresh(showMessage){
     var s=landSession();if(!s||!s.access_token)return false;
-    try{var allRows=[],pageSize=1000,offset=0;
+    try{var allRows=[],pageSize=1000,lastKey=null;
       while(true){
-        var r=await api('/rest/v1/land_claims?select=country_key,country_name,owner_id,owner_name,paid,area_km2&order=country_key.asc&limit='+pageSize+'&offset='+offset,'GET',null,s.access_token);
+        var cursor=lastKey===null?'':'&country_key=gt.'+encodeURIComponent(lastKey);
+        var r=await api('/rest/v1/land_claims?select=country_key,country_name,owner_id,owner_name,paid,area_km2&order=country_key.asc&limit='+pageSize+cursor,'GET',null,s.access_token);
         if(!r.ok||!Array.isArray(r.data)){if(showMessage)$('landMsg').textContent='Could not refresh shared land ownership. Check your connection.';return false;}
         allRows.push.apply(allRows,r.data);
         if(r.data.length<pageSize)break;
-        offset+=pageSize;
+        lastKey=r.data[r.data.length-1].country_key;
       }
       var fresh={};allRows.forEach(function(row){fresh[String(row.country_key).toLowerCase()]={owner:row.owner_name,owner_id:row.owner_id,owner_name:row.owner_name,paid:Number(row.paid)||0,area_km2:Number(row.area_km2)||20.2343,country_name:row.country_name};});
       // Server ownership is authoritative. Never hide owned plots based on a client image mask.
@@ -2187,11 +2266,11 @@ input::placeholder{color:var(--muted);opacity:.8}
     var coord=$('landCoordinates');if(coord&&landSelected&&landSelected.properties){var cp=landPlotCoords(landSelected.properties.plot_key);coord.textContent=cp?((landLat(cp.y+.5)).toFixed(2)+'°, '+(landLon(cp.x+.5)).toFixed(2)+'°'):'Selected area';}else if(coord)coord.textContent='Click the map to choose an area';
     $('landBalance').textContent=landMoney(getBalance());$('landOwnedCount').textContent=landMoney(landOwnedCount());if($('landOwnedAcres'))$('landOwnedAcres').textContent=landMoney(landOwnedCount()*5000);if(nativeMaskPixels){var bad=landOwnedKeys().filter(function(k){return !nativePlotIsLand(k);}).length;if(bad&&$('warSellMsg')&&!$('warSellMsg').textContent)$('warSellMsg').textContent=bad+' plots appear over water. Existing claims have not been moved.';}
     var first=landFirstPlot,hasHome=landHasHomebase();
-    if(!first){$('landCountry').textContent=hasHome?'🏰 Homebase established':'🌍 Pick a homebase area';$('landOwner').textContent=hasHome?'Your territory':'Unclaimed';$('landPrice').textContent=hasHome?'Squad expansion only':String(LAND_BUY_PRICE);$('landBuy').textContent=hasHome?'Homebase claimed · Expand with squad':'Claim Homebase · '+LAND_BUY_PRICE+' Xergs';$('landBuy').disabled=hasHome||getBalance()<LAND_BUY_PRICE;return;}
+    if(!first){$('landCountry').textContent=hasHome?'🏰 Homebase established':'🌍 Pick a homebase area';$('landOwner').textContent=hasHome?'Your territory':'Unclaimed';$('landPrice').textContent=hasHome?'Squad expansion only':String(LAND_BUY_PRICE);$('landBuy').textContent=hasHome?'Homebase claimed · Expand with squad':'Claim Homebase · '+LAND_BUY_PRICE+' Xergs';$('landBuy').disabled=true;return;}
     var p=first.properties,key=p.plot_key,h=landHoldings[key],mine=!!(h&&h.owner_id===landUserId);
     $('landCountry').textContent=hasHome?'Selected expansion area':'🏰 Homebase area';$('landOwner').textContent=mine?(h.owner_name||'You'):(h?(h.owner_name||'Owned'):'Unclaimed area');
     $('landPrice').textContent=hasHome?'Squad only':String(LAND_BUY_PRICE);$('landBuy').textContent=hasHome?'Expand with squad':'Claim Homebase · '+LAND_BUY_PRICE+' Xergs';
-    $('landBuy').disabled=hasHome||!landCanBuyPlot(key)||getBalance()<LAND_BUY_PRICE;
+    $('landBuy').disabled=landBuyPending||landSalePending||landSaleWatch!==null||!landClaimsLastApplied||hasHome||!landCanBuyPlot(key)||getBalance()<LAND_BUY_PRICE;
     var preview=$('landTroopsAfter'),previewNote=$('landTroopPreviewNote');
     if(preview){
       var deployed=(teamUnits||[]).reduce(function(n,u){return n+(u.stationed_plot_key&&landHoldings[u.stationed_plot_key]&&String(landHoldings[u.stationed_plot_key].owner_id)===String(landUserId)?Math.max(0,Number(u.unit_count)||0):0);},0);
@@ -2202,7 +2281,6 @@ input::placeholder{color:var(--muted);opacity:.8}
   function landStyle(feature){var p=feature.properties||{},h=landHoldings[p.plot_key],mine=h&&h.owner_id===landUserId,selected=landFirstPlot&&landFirstPlot.properties.plot_key===p.plot_key||landSecondPlot&&landSecondPlot.properties.plot_key===p.plot_key;return {color:selected?'#fff27a':(mine?'#24146b':(h?'#824400':'#145b2d')),weight:selected?3.5:(mine?2.5:2),opacity:1,fillColor:(h&&clanColorsByOwner[h.owner_id])||(mine?'#7657e8':(h?'#f2a33a':'#54b66a')),fillOpacity:mine?0.98:(h?0.96:0.92),interactive:true};}
   function landRefreshStyles(){if(landMapReady){landLastGridView="";landRenderGrid();}landRefreshPanel();landRenderRallyMarkers();}
   function landSelectPlot(plot){
-    if(landRallyMode){landFirstPlot=plot;landSecondPlot=null;landSelected=plot;landRallyMode=false;$('squadCommand').value='rally';landRefreshStyles();$('applyCommand').click();return;}
     landFirstPlot=plot;landSecondPlot=null;landSelected=plot;landRefreshStyles();landRefreshPanel();
     var h=landHoldings[plot.properties.plot_key];
     if(landHasHomebase())$('landMsg').textContent='Area picked. Your Homebase is already established, so land can only grow through squad expansion.';
@@ -2352,8 +2430,10 @@ input::placeholder{color:var(--muted);opacity:.8}
     return nativeProject(landLat(a.y+.5+(b.y-a.y)*smooth),landLon(a.x+.5+(b.x-a.x)*smooth));
   }
   // Shared server roster: every player renders the same troop types and quantities.
+  var troopsRefreshPending=false;
   async function landSyncOtherTroops(){
-    var session=loadSession();if(!session||!session.access_token)return;
+    var session=loadSession();if(troopsRefreshPending||!session||!session.access_token)return;
+    troopsRefreshPending=true;
     try{
       var r=await api('/rest/v1/rpc/warfare_visible_troops','POST',{},session.access_token);
       if(r.ok&&Array.isArray(r.data)){
@@ -2372,7 +2452,7 @@ input::placeholder{color:var(--muted);opacity:.8}
         landRenderGrid();
         if(typeof warfareRender==='function')warfareRender();
       }
-    }catch(e){}
+    }catch(e){}finally{troopsRefreshPending=false;}
   }
   // Soldiers are VISUAL individuals, not 500 copies of the squad's station marker.
   // Spread them over all owned land and let each independently wander locally.
@@ -2627,16 +2707,23 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   function nativeOwnerColor(id){var n=0;String(id||'other').split('').forEach(function(c){n=(n*31+c.charCodeAt(0))>>>0;});return 'hsl('+(n%360)+' 69% 46%)';}
   function landLoadMap(){
-    if(nativeCanvas){landMapReady=true;landRenderGrid();return;}
+    if(nativeCanvas){landRenderGrid();return;}
     var holder=$('worldMap');holder.innerHTML='';nativeCanvas=document.createElement('canvas');nativeCanvas.style.cssText='width:100%;height:100%;display:block;touch-action:none;cursor:grab;image-rendering:pixelated';holder.appendChild(nativeCanvas);nativeCtx=nativeCanvas.getContext('2d');
     nativeLand.onload=function(){var mc=document.createElement('canvas');mc.width=nativeLand.naturalWidth;mc.height=nativeLand.naturalHeight;nativeMaskCtx=mc.getContext('2d',{willReadFrequently:true});nativeMaskCtx.drawImage(nativeLand,0,0);nativeMaskPixels=nativeMaskCtx.getImageData(0,0,mc.width,mc.height).data;xernCleanTinyIslands();nativeReady=true;landMapReady=true;landMapLoading=false;landSyncClaims(false).then(function(){landSyncOtherTroops();nativeFocusOwnIfAvailable();landRenderGrid();warfareRefreshAssets();});};
+    nativeLand.onerror=function(){
+      landMapReady=false; landMapLoading=false;
+      $('landMsg').textContent='The map image could not load. Reload the game to try again.';
+    };
     nativeLand.src=XERN_LAND_IMAGE;
     landMap={zoomIn:function(){nativeZoom=Math.min(250,nativeZoom*1.6);landRenderGrid();},zoomOut:function(){nativeZoom=Math.max(1,nativeZoom/1.6);landRenderGrid();},setView:function(ll,z){nativeCenter={lat:ll[0],lng:ll[1]};nativeZoom=z===2?1:Math.max(1,z);landRenderGrid();},containerPointToLatLng:function(p){return nativeUnproject(p[0],p[1]);}};
-    nativeCanvas.addEventListener('pointerdown',function(e){nativeDrag={x:e.clientX,y:e.clientY,center:{...nativeCenter},moved:false};nativeCanvas.setPointerCapture(e.pointerId);});
-    nativeCanvas.addEventListener('pointermove',function(e){if(!nativeDrag)return;var dx=e.clientX-nativeDrag.x,dy=e.clientY-nativeDrag.y;if(Math.abs(dx)+Math.abs(dy)>4)nativeDrag.moved=true;var z=nativeScale();nativeCenter.lng=Math.max(-180,Math.min(180,nativeDrag.center.lng-dx/z));nativeCenter.lat=nativeInvMerc(nativeMerc(nativeDrag.center.lat)+dy/(180*nativeYScale()));landRenderGrid();});
-    nativeCanvas.addEventListener('pointerup',function(e){if(!nativeDrag)return;var moved=nativeDrag.moved;nativeDrag=null;if(moved)return;var r=nativeCanvas.getBoundingClientRect(),ll=nativeUnproject(e.clientX-r.left,e.clientY-r.top),x=Math.max(0,Math.min(LAND_X_COUNT-1,landCellX(ll.lng))),y=Math.max(0,Math.min(LAND_Y_COUNT-1,landCellY(ll.lat))),country=landCountryAt(ll.lng,ll.lat)||'Land';var f=landPlotFromCell(x,y,country);
+    nativeCanvas.addEventListener('pointerdown',function(e){if(!e.isPrimary||e.button!==0)return;nativeDrag={id:e.pointerId,x:e.clientX,y:e.clientY,center:{...nativeCenter},moved:false};nativeCanvas.setPointerCapture(e.pointerId);});
+    nativeCanvas.addEventListener('pointermove',function(e){if(!nativeDrag||nativeDrag.id!==e.pointerId)return;var dx=e.clientX-nativeDrag.x,dy=e.clientY-nativeDrag.y;if(Math.abs(dx)+Math.abs(dy)>4)nativeDrag.moved=true;var z=nativeScale();nativeCenter.lng=Math.max(-180,Math.min(180,nativeDrag.center.lng-dx/z));nativeCenter.lat=nativeInvMerc(nativeMerc(nativeDrag.center.lat)+dy/(180*nativeYScale()));landRenderGrid();});
+    nativeCanvas.addEventListener('pointerup',function(e){if(!nativeDrag||nativeDrag.id!==e.pointerId)return;var moved=nativeDrag.moved;nativeDrag=null;if(moved)return;var r=nativeCanvas.getBoundingClientRect(),ll=nativeUnproject(e.clientX-r.left,e.clientY-r.top),x=Math.max(0,Math.min(LAND_X_COUNT-1,landCellX(ll.lng))),y=Math.max(0,Math.min(LAND_Y_COUNT-1,landCellY(ll.lat))),country=landCountryAt(ll.lng,ll.lat)||'Land';var f=landPlotFromCell(x,y,country);
       if(landTool==='rally'){landRallyLatLng=ll;landFirstPlot=f;landSelected=f;$('squadCommand').value='rally';landRefreshPanel();landRenderGrid();$('landMsg').textContent='Destination selected. Press Apply Command to confirm the rally and start advancing.';return;}
       landSelectPlot(f);
+    });
+    nativeCanvas.addEventListener('lostpointercapture',function(e){
+      if(nativeDrag&&nativeDrag.id===e.pointerId)nativeDrag=null;
     });
     nativeCanvas.addEventListener('wheel',function(e){e.preventDefault();var r=nativeCanvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,before=nativeUnproject(x,y);nativeZoom=Math.max(1,Math.min(250,nativeZoom*(e.deltaY<0?1.3:1/1.3)));var after=nativeUnproject(x,y);nativeCenter.lng+=before.lng-after.lng;nativeCenter.lat+=before.lat-after.lat;landRenderGrid();},{passive:false});
     window.addEventListener('resize',landRenderGrid);
@@ -2673,10 +2760,11 @@ input::placeholder{color:var(--muted);opacity:.8}
     liveWarBar.style.zIndex='99999';liveWarBar.style.boxShadow='0 10px 38px #000a';
     liveWarBar.style.pointerEvents='none';
   }
-  var lastLiveWarId=null,lastLiveWarRound=-1,lastLiveWarFinishedAt=0;
-  setInterval(function(){if(landMapReady&&loadSession())registerLandSafeFrontier();},14000);
-  async function syncLiveWar(force){
-    var session=loadSession();if(!session||!session.access_token)return;
+  var lastLiveWarId=null,lastLiveWarRound=-1,liveWarPending=false;
+  setInterval(function(){if(!document.hidden&&landMapReady&&loadSession())registerLandSafeFrontier();},14000);
+  async function syncLiveWar(){
+    var session=loadSession();if(document.hidden||liveWarPending||!session||!session.access_token)return;
+    liveWarPending=true;
     try{
       var uid=(session.user&&session.user.id)||landUserId;
       if(!uid)return;
@@ -2711,36 +2799,38 @@ input::placeholder{color:var(--muted);opacity:.8}
         lastLiveWarId=b.id;lastLiveWarRound=b.round_no;
         if(b.round_no>0&&b.status==='active')warfareAddCombatFx(b.plot_key,'battle');
       }
-    }catch(e){console.warn('Live war display:',e);}
+    }catch(e){console.warn('Live war display:',e);}finally{liveWarPending=false;}
   }
-  setInterval(function(){syncLiveWar(false);},3000);
-  syncLiveWar(true);
+  setInterval(syncLiveWar,3000);
   $('mapMyLand').addEventListener('click',function(){if(!landMap)return;var pts=landOwnedKeys().map(landPlotCoords).filter(Boolean);if(!pts.length){$('landMsg').textContent='You do not own land yet. Pick a relative area to establish your Homebase.';return;}nativeFocusOwn();});
   $('squadTarget').addEventListener('focus',function(){var sel=$('squadTarget'),v=sel.value;sel.innerHTML='<option value="all">All squad members</option>'+teamUnits.map(function(u){return '<option value="'+teamEsc(u.id)+'">'+teamEsc(u.unit_name)+' · '+teamEsc(u.rarity)+'</option>';}).join('');sel.value=v;});
   $('applyCommand').addEventListener('click',async function(){
+    var button=$('applyCommand');if(button.disabled)return;
     var cmd=$('squadCommand').value,target=$('squadTarget').value;
-    var selected=teamUnits.filter(function(u){return Number(u.unit_count||0)>0&&!!u.stationed_plot_key&&(target==='all'||u.id===target);});
+    var selected=teamUnits.filter(function(u){return Number(u.unit_count||0)>0&&!!u.stationed_plot_key&&(target==='all'||String(u.id)===target);});
     if(!selected.length){$('landMsg').textContent='No stationed squad members. Station troops on your land before giving commands.';return;}
     if(cmd==='rally'||cmd==='explore'){
       var key=landFirstPlot&&landFirstPlot.properties?landFirstPlot.properties.plot_key:(landSelected&&landSelected.properties?landSelected.properties.plot_key:null);
       if(!key&&landRallyLatLng)key='plot:'+landCellX(landRallyLatLng.lng)+':'+landCellY(landRallyLatLng.lat);
       if(!key&&cmd==='rally'){$('landMsg').textContent='Choose a rally destination on the map first.';return;}
       var session=loadSession();if(!session||!session.access_token)return;
-      if(cmd==='rally'&&target==='all'){
-        try{
-          var rr=await api('/rest/v1/rpc/warfare_set_colony_rally','POST',{p_target_plot_key:key},session.access_token),rd=rr.data||{};
-          if(!rr.ok||!rd.ok){$('landMsg').textContent='Rally failed: '+(rd.error||rd.message||'server error');return;}
-          xernConfirmedRallyTarget=key;
-          $('rallyColonyStatus').hidden=false;$('rallyColonyStatus').textContent='🎯 '+Number(rd.troops||0).toLocaleString()+' troops ordered toward '+key+' · Expanding in that direction';
-        }catch(e){$('landMsg').textContent='Rally failed: '+e.message;return;}
-      }
-      var successes=0,errors=[];
-      for(var u of selected){try{var r=await api(cmd==='explore'?'/rest/v1/rpc/warfare_set_explore':'/rest/v1/rpc/warfare_set_march','POST',cmd==='explore'?{p_unit_id:u.id}:{p_unit_id:u.id,p_target_plot_key:key},session.access_token);if(r.ok&&r.data&&r.data.ok)successes++;else errors.push((r.data&&r.data.error)||'server rejected order');}catch(e){errors.push(e.message);}}
-      var commandedTroops=selected.slice(0,successes).reduce(function(n,u){return n+Number(u.unit_count||0);},0);
-      $('landMsg').textContent='📣 You have commanded '+commandedTroops.toLocaleString()+' troops across '+successes+' troop groups to '+(cmd==='explore'?'explore new territory':'rally toward '+key)+(errors.length?'. Some orders failed: '+errors.slice(0,2).join(', '):'. Orders confirmed!');
-      var commandNotice=$('xernCommandNotice');if(!commandNotice){commandNotice=document.createElement('div');commandNotice.id='xernCommandNotice';commandNotice.setAttribute('role','status');$('applyCommand').insertAdjacentElement('afterend',commandNotice);}
-      commandNotice.textContent='📣 ORDER CONFIRMED · '+commandedTroops.toLocaleString()+' TROOPS COMMANDED';commandNotice.style.cssText='margin:10px 0;padding:14px;border:2px solid #6ee7b7;border-radius:12px;background:#123b34;color:#e2fff5;font-size:16px;font-weight:900;text-align:center;box-shadow:0 0 20px #34d39955';
-      await landSyncOtherTroops();landRenderGrid();return;
+      button.disabled=true;
+      try{
+        if(cmd==='rally'&&target==='all'){
+          try{
+            var rr=await api('/rest/v1/rpc/warfare_set_colony_rally','POST',{p_target_plot_key:key},session.access_token),rd=rr.data||{};
+            if(!rr.ok||!rd.ok){$('landMsg').textContent='Rally failed: '+(rd.error||rd.message||'server error');return;}
+            xernConfirmedRallyTarget=key;
+            $('rallyColonyStatus').hidden=false;$('rallyColonyStatus').textContent='🎯 '+Number(rd.troops||0).toLocaleString()+' troops ordered toward '+key+' · Expanding in that direction';
+          }catch(e){$('landMsg').textContent='Rally failed: '+e.message;return;}
+        }
+        var successes=0,commandedTroops=0,errors=[];
+        for(var u of selected){try{var r=await api(cmd==='explore'?'/rest/v1/rpc/warfare_set_explore':'/rest/v1/rpc/warfare_set_march','POST',cmd==='explore'?{p_unit_id:u.id}:{p_unit_id:u.id,p_target_plot_key:key},session.access_token);if(r.ok&&r.data&&r.data.ok){successes++;commandedTroops+=Number(u.unit_count||0);}else errors.push(errText(r.data)||'server rejected order');}catch(e){errors.push(e.message);}}
+        $('landMsg').textContent='📣 You have commanded '+commandedTroops.toLocaleString()+' troops across '+successes+' troop groups to '+(cmd==='explore'?'explore new territory':'rally toward '+key)+(errors.length?'. Some orders failed: '+errors.slice(0,2).join(', '):'. Orders confirmed!');
+        var commandNotice=$('xernCommandNotice');if(!commandNotice){commandNotice=document.createElement('div');commandNotice.id='xernCommandNotice';commandNotice.setAttribute('role','status');$('applyCommand').insertAdjacentElement('afterend',commandNotice);}
+        commandNotice.textContent=successes?'📣 '+commandedTroops.toLocaleString()+' TROOPS COMMANDED':'No individual orders confirmed.';commandNotice.style.cssText='margin:10px 0;padding:14px;border:2px solid #6ee7b7;border-radius:12px;background:#123b34;color:#e2fff5;font-size:16px;font-weight:900;text-align:center;box-shadow:0 0 20px #34d39955';
+        await landSyncOtherTroops();landRenderGrid();return;
+      }finally{button.disabled=false;}
     }
     $('landMsg').textContent=cmd.charAt(0).toUpperCase()+cmd.slice(1)+' is not implemented yet. Use Explore or Rally → to issue a movement order.';
   });
@@ -2748,79 +2838,142 @@ input::placeholder{color:var(--muted);opacity:.8}
   async function xernLoadDoctrine(){var ss=loadSession();if(!ss||!ss.access_token||!landUserId)return;try{var r=await api('/rest/v1/xern_war_doctrines?select=doctrine&owner_id=eq.'+encodeURIComponent(landUserId),'GET',null,ss.access_token);if(r.ok&&r.data&&r.data[0])$('warDoctrine').value=r.data[0].doctrine;}catch(e){}}
   setInterval(function(){if(!$('page-warfare').hidden)xernLoadDoctrine();},30000);setTimeout(xernLoadDoctrine,1500);
   $('landRefresh').addEventListener('click',function(){landSyncClaims(true);});
-  $('landSelectRally').addEventListener('click',function(){landRallyMode=true;landTool='rally';$('squadCommand').value='rally';landFirstPlot=null;landSecondPlot=null;landSelected=null;landRefreshStyles();landRefreshPanel();$('landMsg').textContent='RALLY: select a destination tile to send your stationed colony troops expanding in that direction. EXPLORE: choose Explore and issue an order; no destination required.';});
-  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady){var ss=loadSession();if(ss&&ss.access_token)Promise.all([api('/rest/v1/rpc/warfare_march_tick','POST',{},ss.access_token),api('/rest/v1/rpc/warfare_explore_tick','POST',{},ss.access_token)]).then(function(results){var r={ok:true,data:{battles:results.reduce(function(n,x){return n+(x.data&&x.data.battles||0);},0)}};if(r.ok&&r.data&&r.data.battles){var march=warfareMarches.find(function(m){return m.owner_id===landUserId;});if(march)warfareAddCombatFx(march.current_plot_key,'battle');refreshWarfareRecord();$('landMsg').textContent='⚔️ Border war! '+r.data.battles+' battle(s) initiated. Watch the live battle bar at the top.';}});landSyncClaimsIfStale(30000).then(function(){landSyncOtherTroops();registerLandSafeFrontier();});
-    api('/rest/v1/rpc/warfare_frontier_tick','POST',{},ss.access_token).then(function(fr){
-      if(!fr.ok||!fr.data||!fr.data.ok){$('landMsg').textContent='Frontier expansion error: '+((fr.data&&(fr.data.error||fr.data.message))||fr.status||'request failed');return;}
-      if(fr.data.claimed>0){$('landMsg').textContent='🟩 Expanded '+(fr.data.claimed*5000).toLocaleString()+' acres. Troops are pushing the frontier.';landSyncClaimsIfStale(10000).then(function(){landSyncOtherTroops();registerLandSafeFrontier();});}
-      if(fr.data.battles>0){$('landMsg').textContent='⚔️ Border war started! '+fr.data.battles+' battle(s) started. Watch the live battle bar.';refreshWarfareRecord();}
-    }).catch(function(e){$('landMsg').textContent='Frontier error: '+e.message;});}},2000);
+  $('landSelectRally').addEventListener('click',function(){landTool='rally';$('squadCommand').value='rally';landFirstPlot=null;landSecondPlot=null;landSelected=null;landRefreshStyles();landRefreshPanel();$('landMsg').textContent='RALLY: select a destination tile to send your stationed colony troops expanding in that direction. EXPLORE: choose Explore and issue an order; no destination required.';});
+  var expansionPending=false;
+  async function pollExpansion(){
+    var session=loadSession();
+    if(expansionPending||document.hidden||$('page-warfare').hidden||!landMapReady||!session)return;
+    expansionPending=true;
+    var generation=sessionGeneration;
+    try{
+      var results=await Promise.allSettled(['march','explore','frontier'].map(function(kind){
+        return api('/rest/v1/rpc/warfare_'+kind+'_tick','POST',{},session.access_token);
+      }));
+      if(generation!==sessionGeneration)return;
+      var frontier=results[2].value;
+      var battles=results.reduce(function(total,result){
+        var response=result.value;
+        return total+(response&&response.ok?Number(response.data.battles)||0:0);
+      },0);
+      if(battles){
+        var march=warfareMarches.find(function(m){return m.owner_id===landUserId;});
+        if(march)warfareAddCombatFx(march.current_plot_key,'battle');
+        $('landMsg').textContent='⚔️ '+battles+' border battle(s) initiated. Watch the live battle bar.';
+      }else if(frontier&&frontier.ok&&frontier.data.claimed>0){
+        $('landMsg').textContent='🟩 Expanded '+(frontier.data.claimed*5000).toLocaleString()+' acres.';
+      }
+      var failure=results.find(function(result){return !result.value||!result.value.ok||result.value.data.ok===false;});
+      if(failure){
+        $('landMsg').textContent='Warfare update failed: '+(failure.value?(errText(failure.value.data)||('HTTP '+failure.value.status)):failure.reason.message);
+      }
+      if(await landSyncClaimsIfStale(battles||(frontier&&frontier.data.claimed>0)?10000:30000))registerLandSafeFrontier();
+    }finally{expansionPending=false;}
+  }
+  setInterval(pollExpansion,2000);
   // On return from a background tab, catch up without waiting for the next poll.
   document.addEventListener('visibilitychange',function(){
-    if(document.hidden||$('page-warfare').hidden||!landMapReady||!loadSession())return;
+    if(document.hidden||!loadSession())return;
+    syncLiveWar();
+    if($('page-warfare').hidden||!landMapReady)return;
     landSyncClaimsIfStale(5000);
     landSyncOtherTroops();
     teamLoad();
   });
   // Keep eliminated owners' labels from lingering when a battle ends while the map is open.
   setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady)landSyncClaimsIfStale(30000);},30000);
-  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession()){landSyncOtherTroops();teamLoad();}},6000);
+  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession()){landSyncOtherTroops();if(!$('warfareRoster').contains(document.activeElement))teamLoad();}},6000);
   // Animate rallied characters independently of server-controlled expansion cadence.
   setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&nativeReady&&(nativeMarkers.length||nativeEnemyWalkers.length))landRenderGrid();},65);
   $('landBuy').addEventListener('click',async function(){
+    if(landBuyPending||landSalePending||landSaleWatch!==null||!landClaimsLastApplied)return;
     if(landHasHomebase()){$('landMsg').textContent='Homebase is already established. Buy buttons stay locked; your squad expands territory from here.';landRefreshPanel();return;}
     var chosen=landFirstPlot&&landCanBuyPlot(landFirstPlot.properties.plot_key)?landFirstPlot:null;if(!chosen){$('landMsg').textContent='That spot is unavailable or does not connect to your territory. Pick a nearby connected square.';return;}
     var s=landSession();if(!s||!landUserId){$('landMsg').textContent='Please log in again before buying land.';return;}
     if(getBalance()<LAND_BUY_PRICE){$('landMsg').textContent='You need 100 Xergs to buy 100,000 acres.';return;}
     var bulk=landBulkBuyCandidates(chosen,20);if(bulk.length!==20){$('landMsg').textContent='Not enough connected unclaimed land at this spot for a 100,000-acre package. Pick a nearby area.';return;}var keys=bulk.map(function(f){return f.properties.plot_key;}),names=bulk.map(function(f){return f.properties.plot_name;});
-    $('landBuy').disabled=true;$('landMsg').textContent='Buying 100,000 acres (20 connected map pixels) near your selected area…';
+    landBuyPending=true;$('landBuy').disabled=true;$('landMsg').textContent='Buying 100,000 acres (20 connected map pixels) near your selected area…';
     try{var r=await api('/rest/v1/rpc/land_trade','POST',{p_action:'buy',p_plot_keys:keys,p_plot_names:names},s.access_token),d=r.data||{};
       if(!r.ok||!d.ok){await landSyncClaims(false);landRefreshPanel();var why=d.error==='homebase_exists'?'Your Homebase is already established. Expand with your squad instead of buying more land.':d.error==='insufficient_funds'?'You need 100 Xergs to claim your Homebase.':d.error==='already_owned'?'Someone just claimed that area. Pick another spot.':d.error==='not_connected'?'The selected area must connect to your territory.':d.error==='invalid_plot'?'Invalid area selection.':'Could not claim your Homebase. Refresh and try again.';$('landMsg').textContent=why;return;}
-      updateXergsDisplay(d.money);landRememberHomebase(chosen.properties.plot_key);landFirstPlot=null;landSecondPlot=null;landSelected=null;await landSyncClaims(false);landRefreshPanel();$('landMsg').textContent='🏰 Homebase established: 100,000 connected acres claimed. From now on, only your squad can expand your land.';
-    }catch(e){$('landMsg').textContent='Could not complete the purchase. Check your connection and try again.';}finally{landRefreshPanel();landRenderGrid();}
+      updateXergsDisplay(d.money);landRememberHomebase(chosen.properties.plot_key);landFirstPlot=null;landSecondPlot=null;landSelected=null;await refreshClaimsAfterTrade();landRefreshPanel();$('landMsg').textContent='🏰 Homebase established: 100,000 connected acres claimed. From now on, only your squad can expand your land.';
+    }catch(e){await refreshClaimsAfterTrade();$('landMsg').textContent='Purchase outcome could not be confirmed. Check your territory before retrying.';}
+    finally{landBuyPending=false;landRefreshPanel();landRenderGrid();}
   });
-  // Sale requests are authoritative server operations: never hide plots locally before success.
+  // A queued sale belongs to the server. Keep its progress across tab reloads.
+  var landSalePending=false, landSaleWatch=null;
+  function landSaleStorageKey(){return 'xern_land_sale_'+landUserId;}
+  function rememberLandSale(active){
+    try{
+      if(active)sessionStorage.setItem(landSaleStorageKey(),'1');
+      else sessionStorage.removeItem(landSaleStorageKey());
+    }catch(e){}
+  }
+  function resumeLandSale(){
+    try{if(sessionStorage.getItem(landSaleStorageKey()))watchLandSale();}catch(e){}
+  }
+  function watchLandSale(){
+    var generation=sessionGeneration, msg=$('warSellMsg'), btn=$('warSellBtn');
+    if(landSaleWatch!==null)return;
+    btn.disabled=true;
+    async function check(){
+      if(generation!==sessionGeneration)return;
+      var session=landSession();
+      try{
+        var result=await api('/rest/v1/rpc/xern_sell_all_land_status','POST',{},session.access_token),d=result.data;
+        if(!result.ok||!d.ok)throw new Error(errText(d)||('HTTP '+result.status));
+        if(d.status==='done'||d.status==='failed'){
+          rememberLandSale(false); landSaleWatch=null; btn.disabled=false;
+          if(d.status==='done'){
+            try{
+              localStorage.removeItem(landHomebaseStorageKey());
+              localStorage.removeItem('xern_spawn_points_'+landUserId);
+            }catch(e){}
+            landRallyLatLng=null; landFirstPlot=landSecondPlot=landSelected=null;
+            msg.textContent='All-land sale complete: '+Number(d.sold||0).toLocaleString()+' plots sold for '+Number(d.proceeds||0).toLocaleString()+' Xergs.';
+          }else msg.textContent='Land sale failed: '+(d.error||d.message||'check your remaining land.');
+          await Promise.allSettled([refreshClaimsAfterTrade(),resync()]);
+          return;
+        }
+        msg.textContent='Land sale: '+Number(d.sold||0).toLocaleString()+' plots sold; '+Number(d.remaining||0).toLocaleString()+' remaining.';
+      }catch(e){
+        if(generation!==sessionGeneration)return;
+        msg.textContent='Sale status is temporarily unavailable. Checking again shortly.';
+      }
+      landSaleWatch=setTimeout(check,document.hidden?12000:3000);
+    }
+    landSaleWatch=setTimeout(check,1000);
+  }
   $('warSellBtn').addEventListener('click',async function(){
+    if(landSalePending||landSaleWatch!==null)return;
     var owned=landOwnedKeys(),choice=$('warSellPlots').value,amount=choice==='all'?owned.length:Number(choice),msg=$('warSellMsg');
+    if(!landClaimsLastApplied){msg.textContent='Refresh shared land ownership before selling.';return;}
     if(!owned.length){msg.textContent='You have no land to sell.';return;}
-    if(amount>owned.length){msg.textContent='You only own '+owned.length+' plots ('+(owned.length*5000).toLocaleString()+' acres).';return;}
-    var all=amount===owned.length;
+    if(!Number.isSafeInteger(amount)||amount<1||amount>owned.length){msg.textContent='Choose a valid amount. You own '+owned.length+' plots.';return;}
+    var all=amount===owned.length, session=landSession();
+    if(!session||!session.access_token){msg.textContent='Please log in again.';return;}
     if(!confirm('Sell '+(all?'ALL '+owned.length:amount)+' plots ('+(amount*5000).toLocaleString()+' acres) for '+Math.floor(amount*1.5)+' Xergs? This will change your territory on the server.'))return;
-    var session=landSession();if(!session||!session.access_token){msg.textContent='Please log in again.';return;}
-    var btn=$('warSellBtn');btn.disabled=true;msg.textContent='Submitting sale to the server…';
+    var btn=$('warSellBtn');
+    landSalePending=true; btn.disabled=true; landRefreshPanel(); msg.textContent='Submitting sale to the server…';
     try{
       if(all){
-        var queued=await api('/rest/v1/rpc/xern_start_sell_all_land','POST',{},session.access_token),q=queued.data||{};
-        if(!queued.ok||!q.ok){msg.textContent='Could not start land sale: '+(q.error||q.message||('HTTP '+queued.status));return;}
+        var queued=await api('/rest/v1/rpc/xern_start_sell_all_land','POST',{},session.access_token),q=queued.data;
+        if(!queued.ok||!q.ok){msg.textContent='Could not start land sale: '+(errText(q)||('HTTP '+queued.status));return;}
+        rememberLandSale(true);
         msg.textContent='Selling all land in the background. This may take a few minutes; you can keep playing.';
-        var attempts=0;
-        var watch=setInterval(async function(){
-          try{
-            var st=await api('/rest/v1/rpc/xern_sell_all_land_status','POST',{},session.access_token),d=st.data||{};
-            if(!st.ok||!d.ok){clearInterval(watch);msg.textContent='Sale status unavailable. Refresh to check your remaining land.';return;}
-            msg.textContent='Land sale: '+Number(d.sold||0).toLocaleString()+' plots sold; '+Number(d.remaining||0).toLocaleString()+' remaining.';
-            if(d.status==='done'||d.status==='failed'||++attempts>=180){
-              clearInterval(watch);
-              if(d.status==='done'){
-                try{localStorage.removeItem(landHomebaseStorageKey());localStorage.removeItem('xern_spawn_points_'+String(landUserId||'guest'));}catch(e){}
-                landRallyLatLng=null;landFirstPlot=null;landSelected=null;
-                msg.textContent='All-land sale complete: '+Number(d.sold||0).toLocaleString()+' plots sold for '+Number(d.proceeds||0).toLocaleString()+' Xergs.';
-              }else msg.textContent='Sale status: '+d.status+'. Refresh the page to check.';
-              await landSyncClaims(false);landRenderGrid();
-            }
-          }catch(e){clearInterval(watch);msg.textContent='Sale continues on server; status check failed. Refresh later.';}
-        },3000);
+        watchLandSale();
         return;
       }
-      var result=await api('/rest/v1/rpc/warfare_sell_plots','POST',{p_count:amount},session.access_token),data=result.data||{};
-      if(!result.ok||!data.ok){msg.textContent='Sale was not completed: '+(data.error||data.message||('HTTP '+result.status))+'. If partial sale cannot find an edge, choose All my land only if you want a complete reset.';return;}
+      var result=await api('/rest/v1/rpc/warfare_sell_plots','POST',{p_count:amount},session.access_token),data=result.data;
+      if(!result.ok||!data.ok){msg.textContent='Sale was not completed: '+(errText(data)||('HTTP '+result.status));return;}
       if(data.money!=null)updateXergsDisplay(data.money);
-      if(all){try{localStorage.removeItem(landHomebaseStorageKey());localStorage.removeItem('xern_spawn_points_'+String(landUserId||'guest'));}catch(e){}landRallyLatLng=null;landFirstPlot=null;landSelected=null;}
-      await landSyncClaims(false);landRenderGrid();msg.textContent='Sale confirmed. '+data.sold_squares+' plots sold ('+(data.acres_sold||data.sold_squares*5000).toLocaleString()+' acres) for '+(data.proceeds||0)+' Xergs.';
-    }catch(e){msg.textContent='Sale failed: could not reach the backend.';}finally{btn.disabled=false;}
+      await refreshClaimsAfterTrade();
+      msg.textContent='Sale confirmed. '+data.sold_squares+' plots sold ('+(data.acres_sold||data.sold_squares*5000).toLocaleString()+' acres) for '+(data.proceeds||0)+' Xergs.';
+    }catch(e){
+      msg.textContent='Sale outcome could not be confirmed. Check your territory before retrying.';
+      await Promise.allSettled([refreshClaimsAfterTrade(),resync()]);
+    }finally{landSalePending=false;btn.disabled=landSaleWatch!==null;landRefreshPanel();}
   });
   var originalShowApp=showApp;
-  showApp=function(name,money){ landOwnerName=String(name||"commander"); originalShowApp(name,money); landUserId=landJwtUserId(); landRefreshPanel(); if(landMapReady)landRenderGrid(); };
+  showApp=function(name,money){ landOwnerName=String(name||"commander"); landUserId=landJwtUserId(); originalShowApp(name,money); resumeLandSale(); landRefreshPanel(); if(landMapReady)landRenderGrid(); };
 
 
   /* ------------------- TEAM CRATES & RECRUITMENT ------------------- */
@@ -2879,7 +3032,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   async function teamLoad(){
     var s=loadSession();if(!s||!s.access_token){teamUnits=[];teamRender();teamMessage('Please log in again to load your team.',true);return;}
     $('teamRoster').innerHTML='<p class="soon">Loading your roster…</p>';
-    try{var r=await api('/rest/v1/team_units?select=id,unit_name,rarity,unit_type,speed,health,claim_power,attack_value,unit_count,stationed_plot_key,gold_per_hour,level,duplicate_tokens,created_at&order=created_at.desc', 'GET',null,s.access_token);if(!r.ok)throw new Error(errText(r.data)||'Could not load roster');teamUnits=Array.isArray(r.data)?r.data:[];landRenderRallyMarkers();refreshColonyRallyStatus();var pr=await api('/rest/v1/profiles?select=gold','GET',null,s.access_token);if(pr.ok&&Array.isArray(pr.data)&&pr.data[0])updateGoldDisplay(pr.data[0].gold);teamRender();}
+    try{var r=await api('/rest/v1/team_units?select=id,unit_name,rarity,unit_type,speed,health,claim_power,attack_value,unit_count,stationed_plot_key,gold_per_hour,level,duplicate_tokens,created_at&order=created_at.desc', 'GET',null,s.access_token);if(!r.ok)throw new Error(errText(r.data)||'Could not load roster');teamUnits=Array.isArray(r.data)?r.data:[];landRenderRallyMarkers();refreshColonyRallyStatus();var pr=await fetchProfile(s,'gold');if(pr.ok&&Array.isArray(pr.data)&&pr.data[0])updateGoldDisplay(pr.data[0].gold);teamRender();}
     catch(e){$('teamRoster').innerHTML='<p class="soon">Could not load your roster. Try reopening Team.</p>';teamMessage('Roster could not be loaded. Check the connection and try again.',true);}
   }
   var xernTroopQuantities=Object.create(null);
@@ -2920,6 +3073,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       chart.innerHTML='<div class="wcc-head"><strong>🪖 Total Troops Owned: '+totalTroopsOwned.toLocaleString()+'</strong><span>📍 '+deployedCount.toLocaleString()+' deployed · '+counts.length+' owned troop types</span></div><div role="note" style="margin:0 0 12px;padding:9px 12px;border:1px solid #527a96;border-radius:9px;background:#122d40;color:#d9efff;font-size:12px;line-height:1.5">🗺️ <strong>Map display limit: 50 troops per player.</strong> You can own and buy more than 50 (up to the troop ownership limit). Extra troops still count toward your army strength and expansion; only their map icons are hidden to reduce lag.</div>'+
         (counts.length?'<div class="wcc-grid">'+counts.map(function(x){var rarity=String(x.unit.rarity||'common').toLowerCase();return '<div class="wcc-item '+teamEsc(rarity)+'"><div class="wcc-title"><span>'+teamPortraitKey(x.unit)+'</span><span class="wcc-name">'+teamEsc(teamDisplayName(x.unit))+'</span><strong>×'+x.count.toLocaleString()+'</strong></div><div class="wcc-track"><div class="wcc-fill" style="width:'+Math.max(0,Math.min(100,x.count/maxCount*100))+'%"></div></div></div>';}).join('')+'</div>':'<p class="soon">You currently own 0 troops. Troops you buy or unlock will appear here, even without land.</p>');
     }
+    if(el.contains(document.activeElement)&&document.activeElement.matches('.troop-quantity'))return;
     if(!teamUnits.length){el.innerHTML='<p class="soon">No unlocked units yet. Open crates in the Team tab first.</p>';return;}
     var rarityOrder={mythical:-1,legendary:0,epic:1,rare:2,common:3};var orderedUnits=teamUnits.slice().sort(function(a,b){var d=(rarityOrder[String(a.rarity||'common').toLowerCase()]??4)-(rarityOrder[String(b.rarity||'common').toLowerCase()]??4);return d||String(a.unit_name||'').localeCompare(String(b.unit_name||''));});el.innerHTML=orderedUnits.map(function(u){var cost=unitBuyCost(u),lvlCost=unitLevelCost(u),station=u.stationed_plot_key?'Rallied at '+u.stationed_plot_key:'Not rallied';return '<article class="unit-card '+teamEsc(u.rarity)+'" data-deploy-unit="'+teamEsc(u.id)+'"><div class="unit-top"><div class="unit-avatar" aria-hidden="true">'+teamAvatarMarkup(u)+'</div><div><div class="unit-rarity">'+teamEsc(u.rarity)+'</div><div class="unit-name">'+teamEsc(teamDisplayName(u))+'</div><div class="unit-type">'+teamEsc(u.unit_type)+'</div><div class="unit-count-line">Level '+Number(u.level||1)+' · Owned: '+Number(u.unit_count||0)+' · '+Number(u.gold_per_hour||0)+' Gold/hr each</div><div class="unit-count-line">Duplicate upgrade tokens: '+Number(u.duplicate_tokens||0)+' · '+teamEsc(station)+'</div></div></div>'+teamStats(u)+'<div class="unit-count-line" style="margin:10px 0 7px;font-weight:700;color:#e9c66a">Upgrade cards: '+teamEsc(upgradeCardStatus(u))+'</div><div class="unit-action-row"><button class="mini warfare-upgrade" data-unit="'+teamEsc(u.id)+'" '+(teamBusy||Number(u.duplicate_tokens||0)<upgradeCardsRequired(u)||Number(u.level||1)>=20||getBalance()<lvlCost?'disabled':'')+' style="'+(Number(u.level||1)>=10?'background:#9b59e8;color:white;border-color:#9b59e8':(Number(u.level||1)>=5?'background:#e4b93f;color:#182234;border-color:#e4b93f':''))+'">Level '+Number(u.level||1)+' up · '+lvlCost.toLocaleString()+' Xergs</button><div class="troop-trade"><label>Quantity <input class="troop-quantity" type="number" min="1" max="50" value="'+xernTroopQty(u.id)+'" data-unit="'+teamEsc(u.id)+'"></label><button class="mini warfare-buy" data-unit="'+teamEsc(u.id)+'" '+(teamBusy?'disabled':'')+'>Buy Gold · '+cost.toLocaleString()+' each</button><button class="mini warfare-buy-xergs" data-unit="'+teamEsc(u.id)+'" '+(teamBusy?'disabled':'')+'>Buy Xergs · '+cost.toLocaleString()+' each</button><button class="mini warfare-sell" data-unit="'+teamEsc(u.id)+'" '+(teamBusy||Number(u.unit_count||0)<1?'disabled':'')+'>Sell · '+Math.floor(cost/10).toLocaleString()+' Gold each</button></div></div></article>';}).join('');
   }
@@ -3139,15 +3293,16 @@ input::placeholder{color:var(--muted);opacity:.8}
   async function ownerRefreshInbox(){
     var sess=loadSession(),inbox=$("ownerInbox"),items=$("ownerInboxItems");
     if(!sess||!sess.access_token){inbox.hidden=true;$('ownerIntroEditor').hidden=true;return;}
-    var me=await api('/auth/v1/user','GET',null,sess.access_token);
-    if(!me.ok||!me.data||me.data.id!==XERN_OWNER_ID){inbox.hidden=true;$('ownerIntroEditor').hidden=true;return;}
-    inbox.hidden=false;$('ownerIntroEditor').hidden=false;items.textContent='Loading messages…';
-    try{var r=await api('/rest/v1/rpc/xern_read_owner_messages','POST',{},sess.access_token);
+    try{
+      var me=await api('/auth/v1/user','GET',null,sess.access_token);
+      if(!me.ok||!me.data||me.data.id!==XERN_OWNER_ID){inbox.hidden=true;$('ownerIntroEditor').hidden=true;return;}
+      inbox.hidden=false;$('ownerIntroEditor').hidden=false;items.textContent='Loading messages…';
+      var r=await api('/rest/v1/rpc/xern_read_owner_messages','POST',{},sess.access_token);
       if(!r.ok){items.textContent='Could not load inbox: '+errText(r.data);return;}
       items.replaceChildren();var msgs=Array.isArray(r.data)?r.data:[];
       if(!msgs.length){items.textContent='No messages yet.';return;}
       msgs.forEach(function(m){var div=document.createElement('div');div.className='owner-message';var strong=document.createElement('strong');strong.textContent=m.sender_name||'Player';var body=document.createElement('p');body.textContent=m.message;var date=document.createElement('small');date.textContent=new Date(m.created_at).toLocaleString();var del=document.createElement('button');del.type='button';del.className='owner-delete';del.textContent='×';del.title='Close this message after reading';del.setAttribute('aria-label','Close message from '+(m.sender_name||'player'));del.addEventListener('click',async function(){del.disabled=true;try{var rr=await api('/rest/v1/rpc/xern_delete_owner_message','POST',{p_id:m.id},loadSession().access_token);if(rr.ok&&rr.data&&rr.data.ok){div.remove();if(!items.querySelector('.owner-message'))items.textContent='No messages remaining.';}else{alert('Could not close message: '+(rr.data&&rr.data.error||errText(rr.data)));del.disabled=false;}}catch(e){alert('Could not close message.');del.disabled=false;}});div.append(del,strong,body,date);items.appendChild(div);});
-    }catch(e){items.textContent='Could not load messages. Please retry.';}
+    }catch(e){inbox.hidden=true;$('ownerIntroEditor').hidden=true;items.textContent='Could not load messages. Please retry.';}
   }
   $('ownerInboxRefresh').addEventListener('click',ownerRefreshInbox);
   $('ownerMessageSend').addEventListener('click',async function(){
@@ -3197,17 +3352,11 @@ input::placeholder{color:var(--muted);opacity:.8}
   async function showHome(){
     var s = loadSession();
     if(!s || !s.access_token) return false;
-    var p = await fetchProfile(s);
-    if(p.status === 401 && s.refresh_token){
-      var rf = await api("/auth/v1/token?grant_type=refresh_token", "POST", { refresh_token: s.refresh_token });
-      if(!rf.ok || !rf.data.access_token){ clearSession(); return false; }
-      s = { access_token: rf.data.access_token, refresh_token: rf.data.refresh_token };
-      saveSession(s);
-      p = await fetchProfile(s);
-    }
-    if(!p.ok){ throw new Error('Profile request failed (HTTP '+p.status+'): '+(errText(p.data)||'Please retry')); }
+    var p = await fetchProfile(s,"username,money");
+    if(!p.ok)throw new Error('Profile request failed (HTTP '+p.status+'): '+(errText(p.data)||'Please retry.'));
     var row = Array.isArray(p.data) ? p.data[0] : null;
-    showApp(row ? row.username : "commander", row ? row.money : 0);
+    if(!row)throw new Error('Your account has no game profile. Contact the game owner.');
+    showApp(row.username, row.money);
     return true;
   }
 
@@ -3217,6 +3366,7 @@ input::placeholder{color:var(--muted);opacity:.8}
 
   form.addEventListener("submit", async function(e){
     e.preventDefault();
+    if(btn.disabled)return;
     var pass = $("pass").value, user = $("user").value.trim();
     var email = user.toLowerCase() + "@players.example.com";
     if(mode === "join"){
@@ -3234,7 +3384,8 @@ input::placeholder{color:var(--muted);opacity:.8}
         res = await api("/auth/v1/signup", "POST", { email: email, password: pass, data: { username: user } });
         if(!res.ok){
           var t = errText(res.data);
-          return fail(/database error|already/i.test(t) ? "That username is taken. Try another." : (t || "Couldn’t create the account."));
+          if(res.status>=500)return fail("Account creation is temporarily unavailable (HTTP "+res.status+"). Try again shortly.");
+          return fail(/already/i.test(t) ? "That username is taken. Try another." : (t || "Couldn’t create the account."));
         }
         if(!res.data.access_token){
           return fail("Account created, but Supabase still requires email confirmation. Turn off “Confirm email” in your Supabase settings.");
@@ -3245,6 +3396,8 @@ input::placeholder{color:var(--muted);opacity:.8}
           return fail(res.status===429 ? "Too many login attempts. Wait a minute and retry." : res.status>=500 ? "Login server is temporarily unavailable (HTTP "+res.status+"). Try again shortly." : /confirm/i.test(errText(res.data)) ? "Supabase requires email confirmation." : res.status===400||res.status===401 ? "Username or password is incorrect." : "Login failed (HTTP "+res.status+"): "+(errText(res.data)||"Please retry."));
         }
       }
+      if(!res.data.access_token)throw new Error("The server returned no session.");
+      sessionGeneration++;
       saveSession({ access_token: res.data.access_token, refresh_token: res.data.refresh_token });
       say("", false);
       if(!(await showHome())) fail("Session could not be established. Please try again.");
@@ -3256,20 +3409,39 @@ input::placeholder{color:var(--muted);opacity:.8}
     }
   });
 
-  // Recover an authenticated tab after a reload instead of returning to login.
-  if(loadSession()&&loadSession().access_token){
-    showHome().catch(function(err){
-      console.error('Xern session restore failed:',err);
-      say('Previous session could not be restored: '+(err&&err.message||'Please log in again.'),false);
-    });
-  }
-  $("logout").onclick = async function(){
-    var s = loadSession();
-    if(s && s.access_token){ try{ await api("/auth/v1/logout", "POST", null, s.access_token); }catch(e){} }
+  function showLogin(message){
+    sessionGeneration++;
     clearSession();
     clearInterval(gift.timer); clearInterval(stk.timer); stk.timer = null;
+    landUserId=null;
+    clearTimeout(landSaleWatch); landSaleWatch=null; $('warSellBtn').disabled=false;
+    $('warSellMsg').textContent='';
+    stk.rows=[]; stk.hold={}; stk.cost={}; stockChartRequest++; drawChart([]); stkRenderList();
+    landHoldings={};
+    landClaimsLastApplied=0;
+    landFirstPlot=landSecondPlot=landSelected=null;
+    landRallyLatLng=null;
+    teamUnits=[];
+    nativeMarkers=[]; nativeOtherTroops=[]; nativeEnemyWalkers=[]; warfareMarches=[];
+    bActive=false; bjActive=false;
+    ["plinko-drop","bomb-start","bj-deal"].forEach(function(id){$(id).disabled=false;});
+    ["bomb-cashout","bj-hit","bj-stand"].forEach(function(id){$(id).disabled=true;});
+    if(liveWarBar)liveWarBar.style.display='none';
     $("app").hidden = true; $("auth").hidden = false;
     form.reset(); setMode("login");
+    if(message)say(message,false);
+  }
+  // Recover an authenticated tab after a reload instead of returning to login.
+  if(loadSession()&&loadSession().access_token){
+    btn.disabled=true;
+    showHome().catch(function(err){
+      if(loadSession())say('Previous session could not be restored: '+err.message,false);
+    }).finally(function(){btn.disabled=false;});
+  }
+  $("logout").onclick = function(){
+    var s = loadSession();
+    showLogin();
+    if(s&&s.access_token)request("/auth/v1/logout?scope=local", "POST", null, s.access_token).catch(function(){});
   };
 })();
 </script>
