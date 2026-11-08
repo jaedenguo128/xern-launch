@@ -2740,17 +2740,24 @@ input::placeholder{color:var(--muted);opacity:.8}
   setInterval(function(){if(!$('page-warfare').hidden)xernLoadDoctrine();},30000);setTimeout(xernLoadDoctrine,1500);
   $('landRefresh').addEventListener('click',function(){landSyncClaims(true);});
   $('landSelectRally').addEventListener('click',function(){landRallyMode=true;landTool='rally';$('squadCommand').value='rally';landFirstPlot=null;landSecondPlot=null;landSelected=null;landRefreshStyles();landRefreshPanel();$('landMsg').textContent='RALLY: select a destination tile to send your stationed colony troops expanding in that direction. EXPLORE: choose Explore and issue an order; no destination required.';});
-  setInterval(function(){if(!$('page-warfare').hidden&&landMapReady){var ss=loadSession();if(ss&&ss.access_token)Promise.all([api('/rest/v1/rpc/warfare_march_tick','POST',{},ss.access_token),api('/rest/v1/rpc/warfare_explore_tick','POST',{},ss.access_token)]).then(function(results){var r={ok:true,data:{battles:results.reduce(function(n,x){return n+(x.data&&x.data.battles||0);},0)}};if(r.ok&&r.data&&r.data.battles){var march=warfareMarches.find(function(m){return m.owner_id===landUserId;});if(march)warfareAddCombatFx(march.current_plot_key,'battle');refreshWarfareRecord();$('landMsg').textContent='⚔️ Border war! '+r.data.battles+' battle(s) initiated. Watch the live battle bar at the top.';}});landSyncClaimsIfStale(30000).then(function(){landSyncOtherTroops();registerLandSafeFrontier();});
+  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady){var ss=loadSession();if(ss&&ss.access_token)Promise.all([api('/rest/v1/rpc/warfare_march_tick','POST',{},ss.access_token),api('/rest/v1/rpc/warfare_explore_tick','POST',{},ss.access_token)]).then(function(results){var r={ok:true,data:{battles:results.reduce(function(n,x){return n+(x.data&&x.data.battles||0);},0)}};if(r.ok&&r.data&&r.data.battles){var march=warfareMarches.find(function(m){return m.owner_id===landUserId;});if(march)warfareAddCombatFx(march.current_plot_key,'battle');refreshWarfareRecord();$('landMsg').textContent='⚔️ Border war! '+r.data.battles+' battle(s) initiated. Watch the live battle bar at the top.';}});landSyncClaimsIfStale(30000).then(function(){landSyncOtherTroops();registerLandSafeFrontier();});
     api('/rest/v1/rpc/warfare_frontier_tick','POST',{},ss.access_token).then(function(fr){
       if(!fr.ok||!fr.data||!fr.data.ok){$('landMsg').textContent='Frontier expansion error: '+((fr.data&&(fr.data.error||fr.data.message))||fr.status||'request failed');return;}
       if(fr.data.claimed>0){$('landMsg').textContent='🟩 Expanded '+(fr.data.claimed*5000).toLocaleString()+' acres. Troops are pushing the frontier.';landSyncClaimsIfStale(10000).then(function(){landSyncOtherTroops();registerLandSafeFrontier();});}
       if(fr.data.battles>0){$('landMsg').textContent='⚔️ Border war started! '+fr.data.battles+' battle(s) started. Watch the live battle bar.';refreshWarfareRecord();}
     }).catch(function(e){$('landMsg').textContent='Frontier error: '+e.message;});}},2000);
+  // On return from a background tab, catch up without waiting for the next poll.
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden||$('page-warfare').hidden||!landMapReady||!loadSession())return;
+    landSyncClaimsIfStale(5000);
+    landSyncOtherTroops();
+    teamLoad();
+  });
   // Keep eliminated owners' labels from lingering when a battle ends while the map is open.
-  setInterval(function(){if(!$('page-warfare').hidden&&landMapReady)landSyncClaimsIfStale(30000);},30000);
-  setInterval(function(){if(!$('page-warfare').hidden&&landMapReady&&loadSession()){landSyncOtherTroops();teamLoad();}},6000);
+  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady)landSyncClaimsIfStale(30000);},30000);
+  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession()){landSyncOtherTroops();teamLoad();}},6000);
   // Animate rallied characters independently of server-controlled expansion cadence.
-  setInterval(function(){if(!$('page-warfare').hidden&&nativeReady&&(nativeMarkers.length||nativeEnemyWalkers.length))landRenderGrid();},65);
+  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&nativeReady&&(nativeMarkers.length||nativeEnemyWalkers.length))landRenderGrid();},65);
   $('landBuy').addEventListener('click',async function(){
     if(landHasHomebase()){$('landMsg').textContent='Homebase is already established. Buy buttons stay locked; your squad expands territory from here.';landRefreshPanel();return;}
     var chosen=landFirstPlot&&landCanBuyPlot(landFirstPlot.properties.plot_key)?landFirstPlot:null;if(!chosen){$('landMsg').textContent='That spot is unavailable or does not connect to your territory. Pick a nearby connected square.';return;}
