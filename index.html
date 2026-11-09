@@ -799,7 +799,7 @@ input::placeholder{color:var(--muted);opacity:.8}
         <div class="wealth-heading" style="margin-top:20px"><h3>💰 TOP 5 WEALTHIEST PLAYERS</h3><span>Richest players · current Xergs balance</span></div>
         <div id="homeRichRanks" aria-live="polite"><p class="wealth-status">Loading wealthy players…</p></div>
         <button type="button" class="mini wealth-refresh" id="homeRichRefresh">↻ Refresh wealth rankings</button>
-        <div class="wealth-heading" style="margin-top:20px"><h3>🏰 TOP 5 CLANS BY LAND</h3><span>Combined clan land · Sunday 00:00 UTC: winning clan earns 50,000 Xergs per member</span></div>
+        <div class="wealth-heading" style="margin-top:20px"><h3>🏰 TOP 5 CLANS BY LAND</h3><span>Combined clan land · Sunday midnight Eastern: winning clan earns 50,000 Xergs per member</span></div>
         <div id="homeClanRanks" aria-live="polite"><p class="wealth-status">Loading clan rankings…</p></div>
         <button type="button" class="mini wealth-refresh" id="homeClanRefresh">↻ Refresh clan leaderboard</button>
       </aside>
@@ -1063,8 +1063,8 @@ input::placeholder{color:var(--muted);opacity:.8}
       <label for="giftRecipient">Recipient username</label><input id="giftRecipient" type="text" maxlength="60" autocomplete="off" placeholder="e.g. QinShiHuang">
       <label for="giftAmount">Xergs to gift</label><input id="giftAmount" type="number" min="1" step="1" placeholder="10,000">
       <div class="gift-breakdown"><span>Recipient receives <strong id="giftNet">0 Xergs</strong></span><span>Transfer fee (0.05%) <strong id="giftFee">0 Xergs</strong></span><span>Total deducted <strong id="giftTotal">0 Xergs</strong></span></div>
-      <button type="button" id="giftSubmit" disabled title="Secure transfers are not available yet">🔒 Sending unavailable</button>
-      <p id="giftStatus" role="status">The transfer service is not yet enabled. This calculator does not move money.</p>
+      <button type="button" id="giftSubmit" disabled>Send Xergs</button>
+      <p id="giftStatus" role="status"></p>
     </section>
   </section>
   <section class="page" id="page-airdrops" hidden>
@@ -1140,13 +1140,13 @@ input::placeholder{color:var(--muted);opacity:.8}
     <div class="collection-grid" id="teamCollection"></div>
   </section>
   <section class="page" id="page-allies" hidden>
-  <div class="clan-hero"><div><div class="clan-kicker">XERN CLANS · ALLIES</div><h2>⚔️ Build your clan</h2><p>Lead your squad, expand your territory, and compete for the weekly land crown.</p></div><div class="clan-prize">🏆 WEEKLY PRIZE<strong>50,000 ✦</strong><small>Each winning clan member · Previous UTC week</small></div></div>
+  <div class="clan-hero"><div><div class="clan-kicker">XERN CLANS · ALLIES</div><h2>⚔️ Build your clan</h2><p>Lead your squad, expand your territory, and compete for the weekly land crown.</p></div><div class="clan-prize">🏆 WEEKLY PRIZE<strong>50,000 ✦</strong><small>Each winning clan member · Sunday midnight Eastern</small></div></div>
   <div id="clanStatus" class="clan-status">Loading clans…</div>
   <div id="clanMine" class="clan-box" hidden></div>
   <div id="clanStart" class="clan-box"><h3>🛡️ Create a clan</h3><p>Creation costs <strong>100,000 Xergs</strong>. You become its leader. All clans begin with 5 member slots and can upgrade to a maximum of 10.</p><div class="clan-controls"><input id="clanNewName" maxlength="30" placeholder="Clan name (3–30 characters)"><label><input id="clanNewPublic" type="checkbox" checked> Public clan</label><button id="clanCreate" type="button">Create · 100,000 ✦</button></div></div>
   <div class="clan-box"><div class="clan-heading"><h3>🏆 Clan leaderboard</h3><button id="clanRefresh" type="button">Refresh</button></div><div id="clanList">Loading…</div></div>
   <div class="clan-box"><h3>📨 Your invitations</h3><div id="clanInvites">Loading…</div></div>
-  <p class="clan-footnote">The clan with the highest combined land total across all members wins the weekly prize. Weekly prizes are settled when an authenticated player opens this page after the week ends. Land totals use 5,000 acres per claimed plot. A clan's land belongs to its individual players, not to a shared wallet.</p>
+  <p class="clan-footnote">The clan with the highest combined land total across all members wins the weekly prize. Weekly prizes settle automatically at the end of the week. Land totals use 5,000 acres per claimed plot. A clan's land belongs to its individual players, not to a shared wallet.</p>
 </section>
   <section class="page" id="page-warfare" hidden>
 <div id="warfareBattleBar" style="display:none;position:sticky;top:0;z-index:20;background:#101d34;border:1px solid #60718a;border-radius:10px;padding:12px;margin-bottom:12px;color:white">
@@ -1179,13 +1179,13 @@ input::placeholder{color:var(--muted);opacity:.8}
         <button class="mini land-action" id="landSelectRally" title="Pick where your troops should march" type="button">🎯 Set rally point</button><button class="go land-action" id="landBuy" disabled>Claim Homebase · 100 Xergs</button><p class="land-msg">Pick a relative area on the map. Your first claim is your Homebase; all later growth comes from your squad.</p>
         <div class="land-stat xern-command-hub"><span>⚔️ ISSUE ORDERS · COMMAND CENTER</span><br><select id="squadCommand" class="land-select"><option value="explore">Explore</option><option value="hold">Hold</option><option value="rally">Rally →</option><option value="recall">Recall</option><option value="dismiss">Dismiss</option></select></div>
         <div class="land-stat"><span>Apply to</span><br><select id="squadTarget" class="land-select"><option value="all">All squad members</option></select></div><button class="go land-action" id="applyCommand" title="Send the selected troops toward the chosen map plot" type="button">▶ Apply command</button>
-        <p class="land-note" style="line-height:1.45;margin:8px 0 12px"><b>Explore:</b> wander &amp; grow land. <b>Hold:</b> stand still. <b>Rally →:</b> march toward your rally point. <b>Recall:</b> return home. <b>Dismiss:</b> remove a troop. Select a command and press Apply command. Currently Explore and Rally send marching orders.</p><div class="land-stat xern-command-hub"><span>🛡️ WAR DOCTRINE · CHOOSE YOUR STRATEGY</span><br><select id="warDoctrine" class="land-select"><option value="stationary">🛡️ Stationary · Normal expansion / normal damage</option><option value="defensive">🏰 Defensive · −10% expansion / +20% attack</option><option value="aggressive">⚔️ Aggressive · +10% expansion / −10% attack</option></select></div>
+        <p class="land-note" style="line-height:1.45;margin:8px 0 12px"><b>Explore:</b> wander &amp; grow land. <b>Hold:</b> stand still. <b>Rally →:</b> march toward your rally point. <b>Recall:</b> return home. <b>Dismiss:</b> remove a troop. Select a command and press Apply command. Orders are confirmed by the server.</p><div class="land-stat xern-command-hub"><span>🛡️ WAR DOCTRINE · CHOOSE YOUR STRATEGY</span><br><select id="warDoctrine" class="land-select"><option value="stationary">🛡️ Stationary · Normal expansion / normal damage</option><option value="defensive">🏰 Defensive · −10% expansion / +20% attack</option><option value="aggressive">⚔️ Aggressive · +10% expansion / −10% attack</option></select></div>
         <div id="rallyColonyStatus" role="status" hidden style="padding:12px 14px;margin:10px 0;border:2px solid #58b8ee;border-radius:12px;background:linear-gradient(115deg,#132f53,#13213b);color:#f1faff;font-weight:700">🎯 Rally active</div><p class="land-msg" id="landMsg" role="status">Click anywhere on the map to pick a relative location. Use Set rally point to place ◎, or drag a character card onto the map.</p>
         <div class="land-stat" style="margin-top:18px"><strong>Sell territory</strong><p class="land-note">Sell land for 30 Xergs per 100,000 acres (20 plots). 1 plot = 5,000 acres. Server confirmation is required.</p><label for="warSellPlots">Amount to sell</label><select id="warSellPlots" class="land-select"><option value="1">5,000 acres (1 plot)</option><option value="5">25,000 acres (5 plots)</option><option value="20">100,000 acres (20 plots)</option><option value="100">500,000 acres (100 plots)</option><option value="all">All my land</option></select><button class="go sell land-action" id="warSellBtn" type="button">Sell selected land</button><p class="land-msg" id="warSellMsg" role="status"></p></div>
         <div class="land-stat"><span>Squares owned</span><br><strong id="landOwnedCount">0</strong></div><div class="land-stat"><span>Acres owned</span><br><strong id="landOwnedAcres">0</strong> acres</div>
       </aside>
     </div>
-    <section class="market-item" style="margin-top:12px"><h3>🛡️ WARFARE EQUIPMENT</h3><p>Equipment automatically deploys to safe owned land. Every 10 million acres unlocks one tank, tower and bush slot. Tanks expire after one hour.</p><div id="warfareAssetStats" style="display:flex;gap:10px;flex-wrap:wrap">Loading equipment…</div><p class="market-status" id="warfareAssetPlaceMsg" role="status"></p></section>
+    <section class="market-item" style="margin-top:12px"><h3>🛡️ WARFARE EQUIPMENT</h3><p>Equipment automatically deploys to safe owned land. Every 5 million acres unlocks one shared equipment slot. Tanks expire after one hour.</p><div id="warfareAssetStats" style="display:flex;gap:10px;flex-wrap:wrap">Loading equipment…</div><p class="market-status" id="warfareAssetPlaceMsg" role="status"></p></section>
     <h3 class="team-section-title" style="margin-top:22px">YOUR CHARACTERS</h3><p class="soon" style="text-align:left;margin:0 0 8px">Buy or sell 1–50 troops at a time. Your troop counts show everything you own, even when no troops are on the map. Only deployed troops can receive map commands.</p><div role="note" style="margin:10px 0 16px;padding:15px 18px;border:2px solid #f4c75e;border-radius:14px;background:linear-gradient(110deg,#33280d,#171d32);color:#ffe79a;font-size:16px;font-weight:900;line-height:1.45;box-shadow:0 0 18px #e7ae3222">✅ EACH STATIONED TROOP IS DRAWN INDIVIDUALLY. When you own land, your available troops deploy automatically. Troops without land remain in your inventory and keep their displayed counts.</div><div id="warfareCharacterChart" class="warfare-character-chart" aria-label="Owned character counts"></div><div class="team-roster warfare-roster horizontal-roster" id="warfareRoster"><p class="soon">Loading unlocked characters…</p></div>
   </section>
 </div>
@@ -1338,7 +1338,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     try{
       var r=await api('/rest/v1/rpc/xern_christmas_status','POST',{},ss.access_token);
       if(r.ok&&r.data&&r.data.ok)xmasRender(r.data);
-      else if($('xmasStatus'))$('xmasStatus').textContent='Presents will be available when the Christmas rewards database update is approved.';
+      else if($('xmasStatus'))$('xmasStatus').textContent='Presents are temporarily unavailable. Try again shortly.';
     }catch(e){if($('xmasStatus'))$('xmasStatus').textContent='Could not check presents. Try again later.';}
   }
   document.querySelectorAll('[data-xmas-color]').forEach(function(b){
@@ -1367,27 +1367,6 @@ input::placeholder{color:var(--muted);opacity:.8}
     var p = await fetchProfile(s,"money,gold,team_buff_expires_at");
     if(p.ok && Array.isArray(p.data) && p.data[0]) { updateXergsDisplay(p.data[0].money); updateGoldDisplay(p.data[0].gold); updateBoostStatus(p.data[0].team_buff_expires_at); }
   }
-  // Results are sent one at a time so quick back-to-back rounds can't overwrite each other.
-  var settleQueue = Promise.resolve();
-  function settle(game, bet, payout){
-    var generation=sessionGeneration;
-    settleQueue = settleQueue.then(async function(){
-      var s=loadSession();
-      if(!s||generation!==sessionGeneration)return;
-      var message;
-      try{
-        var r=await api("/rest/v1/rpc/casino_round","POST",{p_game:game,p_bet:bet,p_payout:payout},s.access_token);
-        if(r.ok&&r.data.ok){updateXergsDisplay(r.data.money);return;}
-        message="Round rejected: "+(errText(r.data)||("HTTP "+r.status));
-      }catch(e){message="The server could not confirm this round. Check your balance before playing again.";}
-      if(generation!==sessionGeneration)return;
-      var status=$(({mines:"bomb",blackjack:"bj"}[game]||game)+"-msg");
-      status.className="msg"; status.textContent=message;
-      try{await resync();}catch(e){}
-    });
-    return settleQueue;
-  }
-
   function setMode(m){
     mode = m;
     var join = m === "join";
@@ -1474,308 +1453,120 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   drawPlinko();
 
-  if ($("plinko-drop")) {
-    $("plinko-drop").onclick = function() {
-      var bet = Number($("plinko-bet").value);
-      var bal = getBalance();
-      if (!Number.isSafeInteger(bet) || bet <= 0 || bet > bal) {
-        if ($("plinko-msg")) { $("plinko-msg").className = "msg"; $("plinko-msg").textContent = "Invalid bet or insufficient Xergs!"; }
-        return;
-      }
-
-      updateXergsDisplay(bal - bet);
-      if ($("plinko-msg")) { $("plinko-msg").className = "msg"; $("plinko-msg").textContent = "Wagered " + bet + " Xergs..."; }
-      $("plinko-drop").disabled = true;
-
-      var ball = { x: 260 + (Math.random() - 0.5) * 4, y: 12, vx: 0, vy: 2 };
-      var generation=sessionGeneration;
-      var anim = setInterval(function() {
-        if(generation!==sessionGeneration){clearInterval(anim);return;}
-        ball.y += ball.vy;
-        ball.x += ball.vx;
-        ball.vy += 0.22;
-
-        pPegs.forEach(function(p) {
-          var dx = ball.x - p.x, dy = ball.y - p.y;
-          var dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist < 11.5) {
-            ball.vy = -1.6;
-            ball.vx = (Math.random() - 0.5) * 3.8;
-          }
-        });
-
-        drawPlinko(ball);
-
-        if (ball.y >= 390) {
-          clearInterval(anim);
-          var slot = Math.floor((ball.x - 20) / (480 / pMultipliers.length));
-          slot = Math.max(0, Math.min(pMultipliers.length - 1, slot));
-          var win = Math.floor(bet * pMultipliers[slot]);
-          updateXergsDisplay(getBalance() + win);
-          settle("plinko", bet, win);
-          
-          if ($("plinko-msg")) {
-            $("plinko-msg").className = win >= bet ? "msg ok" : "msg";
-            $("plinko-msg").textContent = "Landed on " + pMultipliers[slot] + "x! Won " + win + " Xergs!";
-          }
-          $("plinko-drop").disabled = false;
-          drawPlinko();
-        }
-      }, 20);
-    };
+  var casinoBusy={}, plinkoAnimation=0;
+  var casinoLabels={plinko:"plinko-msg",mines:"bomb-msg",dice:"dice-msg",blackjack:"bj-msg"};
+  function casinoMessage(game,message,ok){
+    var node=$(casinoLabels[game]);
+    node.className=ok?"msg ok":"msg"; node.textContent=message;
   }
-
-  /* ------------------- BOMB / MINES GAME (ALWAYS 3 MINES) ------------------- */
-  var bActive = false, bTiles = [], bSafeRevealed = 0, bBet = 0;
-  function renderMinesGrid() {
-    var grid = $("mines-grid");
-    if (!grid) return;
-    grid.innerHTML = "";
-    for (var i = 0; i < 25; i++) {
-      var btn = document.createElement("div");
-      btn.className = "mine-card";
-      btn.dataset.idx = i;
-      btn.onclick = function() { clickMine(this); };
-      grid.appendChild(btn);
+  async function casinoAction(game,action,bet,pick,render){
+    var session=loadSession(), generation=sessionGeneration;
+    if(!session||casinoBusy[game])return;
+    if(action==="start"&&(!Number.isSafeInteger(bet)||bet<1||bet>getBalance())){
+      casinoMessage(game,"Invalid bet or insufficient Xergs.",false); return;
     }
+    casinoBusy[game]=true;
+    try{
+      var result=await api("/rest/v1/rpc/casino_action","POST",{p_game:game,p_action:action,p_bet:bet??null,p_pick:pick??null},session.access_token);
+      if(!result.ok||!result.data.ok){casinoMessage(game,errText(result.data)||"The round could not be completed.",false);return;}
+      updateXergsDisplay(result.data.money);
+      render(result.data,action);
+    }catch(e){
+      if(generation===sessionGeneration)casinoMessage(game,"Round outcome unavailable. Reopen Casino to check an active round.",false);
+    }finally{delete casinoBusy[game];}
   }
-  renderMinesGrid();
-
-  if ($("bomb-start")) {
-    $("bomb-start").onclick = function() {
-      bBet = Number($("bomb-bet").value);
-      var bal = getBalance();
-      if (!Number.isSafeInteger(bBet) || bBet <= 0 || bBet > bal) {
-        if ($("bomb-msg")) { $("bomb-msg").className = "msg"; $("bomb-msg").textContent = "Invalid bet or insufficient Xergs!"; }
-        return;
-      }
-      
-      updateXergsDisplay(bal - bBet);
-
-      bActive = true; bSafeRevealed = 0;
-      bTiles = Array(25).fill("gem");
-      
-      // ALWAYS EXACTLY 3 MINES
-      var bombs = 0;
-      while (bombs < 3) {
-        var r = Math.floor(Math.random() * 25);
-        if (bTiles[r] !== "bomb") { bTiles[r] = "bomb"; bombs++; }
-      }
-      
-      renderMinesGrid();
-      if ($("bomb-msg")) { $("bomb-msg").className = "msg ok"; $("bomb-msg").textContent = "Wagered " + bBet + " Xergs! 3 bombs hidden. Reveal gems!"; }
-      $("bomb-start").disabled = true;
-      $("bomb-cashout").disabled = true;
-      $("bomb-cashout").textContent = "Cashout";
-    };
-  }
-
-  function clickMine(el) {
-    if (!bActive || el.classList.contains("revealed")) return;
-    var idx = el.dataset.idx;
-    el.classList.add("revealed");
-
-    if (bTiles[idx] === "bomb") {
-      el.classList.add("bomb"); el.textContent = "💣";
-      if ($("bomb-msg")) { $("bomb-msg").className = "msg"; $("bomb-msg").textContent = "BOOM! You hit a mine. Lost " + bBet + " Xergs."; }
-      bActive = false;
-      settle("mines", bBet, 0);
-      $("bomb-start").disabled = false;
-      $("bomb-cashout").disabled = true;
-    } else {
-      el.classList.add("gem"); el.textContent = "💎";
-      bSafeRevealed++;
-      var mult = Math.pow(1.12, bSafeRevealed);
-      var currentWin = Math.floor(bBet * mult);
-      if ($("bomb-msg")) { $("bomb-msg").className = "msg ok"; $("bomb-msg").textContent = "Found gem! Current Cashout: " + currentWin + " Xergs"; }
-      $("bomb-cashout").disabled = false;
-      $("bomb-cashout").textContent = "Cashout " + currentWin + " Xergs";
-    }
-  }
-
-  if ($("bomb-cashout")) {
-    $("bomb-cashout").onclick = function() {
-      if (!bActive) return;
-      var mult = Math.pow(1.12, bSafeRevealed);
-      var win = Math.floor(bBet * mult);
-      updateXergsDisplay(getBalance() + win);
-      settle("mines", bBet, win);
-      if ($("bomb-msg")) { $("bomb-msg").className = "msg ok"; $("bomb-msg").textContent = "Cashed out " + win + " Xergs!"; }
-      bActive = false;
-      $("bomb-start").disabled = false;
-      $("bomb-cashout").disabled = true;
-    };
-  }
-
-  /* ------------------- 1-100 DICE GAME ------------------- */
-  var dSlider = $("dice-slider");
-  if (dSlider) {
-    dSlider.oninput = function() {
-      var val = parseInt(this.value);
-      if ($("dice-target-lbl")) $("dice-target-lbl").textContent = "Roll Over: " + val;
-      var winProb = (100 - val) / 100;
-      var mult = (0.98 / winProb).toFixed(2);
-      if ($("dice-mult")) $("dice-mult").textContent = mult + "x";
-    };
-  }
-
-  if ($("dice-roll")) {
-    $("dice-roll").onclick = function() {
-      var bet = Number($("dice-bet").value);
-      var bal = getBalance();
-      if (!Number.isSafeInteger(bet) || bet <= 0 || bet > bal) {
-        if ($("dice-msg")) { $("dice-msg").className = "msg"; $("dice-msg").textContent = "Invalid bet or insufficient Xergs!"; }
-        return;
-      }
-
-      updateXergsDisplay(bal - bet);
-
-      var roll = Math.floor(Math.random() * 100) + 1;
-      if ($("dice-res")) $("dice-res").textContent = roll;
-      var target = parseInt(dSlider ? dSlider.value : 50);
-
-      if (roll > target) {
-        var winProb = (100 - target) / 100;
-        var mult = 0.98 / winProb;
-        var win = Math.floor(bet * mult);
-        updateXergsDisplay(getBalance() + win);
-        settle("dice", bet, win);
-        if ($("dice-msg")) {
-          $("dice-msg").className = "msg ok";
-          $("dice-msg").textContent = "You rolled " + roll + "! Won " + win + " Xergs!";
-        }
-      } else {
-        settle("dice", bet, 0);
-        if ($("dice-msg")) {
-          $("dice-msg").className = "msg";
-          $("dice-msg").textContent = "You rolled " + roll + ". Lost " + bet + " Xergs.";
+  $("plinko-drop").onclick=async function(){
+    var button=this,generation=sessionGeneration;
+    button.disabled=true;
+    await casinoAction("plinko","start",Number($("plinko-bet").value),null,function(result){
+      var target=20+(result.slot+.5)*480/pMultipliers.length;
+      var start=performance.now(), duration=850;
+      casinoMessage("plinko","Dropping…",true);
+      function frame(now){
+        if(generation!==sessionGeneration)return;
+        var progress=Math.min(1,(now-start)/duration);
+        drawPlinko({x:260+(target-260)*progress+Math.sin(progress*30)*16*(1-progress),y:12+378*progress});
+        if(progress<1)plinkoAnimation=requestAnimationFrame(frame);
+        else{
+          button.disabled=false; plinkoAnimation=0;
+          casinoMessage("plinko","Landed on "+result.multiplier+"× · "+fm(result.payout,0)+" Xergs paid.",result.payout>=result.bet);
         }
       }
-    };
-  }
-
-  /* ------------------- BLACKJACK GAME ------------------- */
-  var bjDeck = [], bjPlayer = [], bjDealer = [], bjBet = 0, bjActive = false;
-  function createDeck() {
-    var suits = ["♠", "♥", "♦", "♣"], values = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"];
-    bjDeck = [];
-    suits.forEach(function(s) {
-      values.forEach(function(v) {
-        var weight = parseInt(v);
-        if (["J","Q","K"].indexOf(v) >= 0) weight = 10;
-        if (v === "A") weight = 11;
-        bjDeck.push({ suit: s, val: v, weight: weight });
-      });
+      plinkoAnimation=requestAnimationFrame(frame);
     });
-    for(var i=bjDeck.length-1;i>0;i--){
-      var j=Math.floor(Math.random()*(i+1));
-      [bjDeck[i],bjDeck[j]]=[bjDeck[j],bjDeck[i]];
+    if(!plinkoAnimation)button.disabled=false;
+  };
+
+  function renderMines(result,action){
+    var grid=$("mines-grid");
+    grid.replaceChildren();
+    var found=result.revealed||[], bomb=result.bomb;
+    for(var i=0;i<25;i++){
+      var tile=document.createElement("button"), gem=found.includes(i), hit=bomb===i;
+      tile.type="button"; tile.className="mine-card"+(gem?" revealed gem":hit?" revealed bomb":"");
+      tile.dataset.idx=i; tile.textContent=gem?"💎":hit?"💣":"";
+      tile.setAttribute("aria-label","Tile "+(i+1)+(gem?", gem":hit?", mine":""));
+      tile.disabled=!result.active||gem;
+      grid.appendChild(tile);
     }
+    $("bomb-start").disabled=!!result.active;
+    $("bomb-cashout").disabled=!result.active||!found.length;
+    $("bomb-cashout").textContent=result.active&&found.length?"Cashout "+fm(result.cashout,0)+" Xergs":"Cashout";
+    if(result.active)casinoMessage("mines",found.length?"Found "+found.length+" gem(s).":"Wagered "+result.bet+" Xergs. Three mines hidden.",true);
+    else if(action!=="status")casinoMessage("mines",bomb!=null?"You hit a mine. Lost "+result.bet+" Xergs.":"Cashed out "+fm(result.payout,0)+" Xergs!",bomb==null);
   }
+  renderMines({}, "status");
+  $("bomb-start").onclick=function(){casinoAction("mines","start",Number($("bomb-bet").value),null,renderMines);};
+  $("bomb-cashout").onclick=function(){casinoAction("mines","cashout",null,null,renderMines);};
+  $("mines-grid").addEventListener("click",function(event){
+    var tile=event.target.closest("button[data-idx]");
+    if(tile&&!tile.disabled)casinoAction("mines","reveal",null,Number(tile.dataset.idx),renderMines);
+  });
 
-  function getHandScore(hand) {
-    var score = 0, aces = 0;
-    hand.forEach(function(c) { score += c.weight; if (c.val === "A") aces++; });
-    while (score > 21 && aces > 0) { score -= 10; aces--; }
-    return score;
-  }
-
-  function renderHand(hand, containerId, hideFirst) {
-    var box = $(containerId);
-    if (!box) return;
-    box.innerHTML = "";
-    hand.forEach(function(c, i) {
-      var card = document.createElement("div");
-      if (hideFirst && i === 0) {
-        card.className = "card"; card.textContent = "🂠";
-      } else {
-        card.className = "card" + (c.suit === "♥" || c.suit === "♦" ? " red" : "");
-        card.textContent = c.val + c.suit;
-      }
-      box.appendChild(card);
+  var dSlider=$("dice-slider");
+  dSlider.oninput=function(){
+    var target=Number(this.value);
+    $("dice-target-lbl").textContent="Roll Over: "+target;
+    $("dice-mult").textContent=(98/(100-target)).toFixed(2)+"x";
+  };
+  $("dice-roll").onclick=async function(){
+    var button=this;
+    button.disabled=true;
+    await casinoAction("dice","start",Number($("dice-bet").value),Number(dSlider.value),function(result){
+      $("dice-res").textContent=result.roll;
+      casinoMessage("dice","You rolled "+result.roll+(result.payout?". Won "+result.payout:". Lost "+result.bet)+" Xergs.",!!result.payout);
+    });
+    button.disabled=false;
+  };
+  function renderHand(hand,id){
+    var box=$(id), suits=["♠","♥","♦","♣"], ranks=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+    box.replaceChildren();
+    (hand||[]).forEach(function(card){
+      var tile=document.createElement("div"), suit=Math.floor(card/13);
+      tile.className="card"+(suit===1||suit===2?" red":"");
+      tile.textContent=card<0?"🂠":ranks[card%13]+suits[suit];
+      box.appendChild(tile);
     });
   }
-
-  if ($("bj-deal")) {
-    $("bj-deal").onclick = function() {
-      bjBet = Number($("bj-bet").value);
-      var bal = getBalance();
-      if (!Number.isSafeInteger(bjBet) || bjBet <= 0 || bjBet > bal) {
-        if ($("bj-msg")) { $("bj-msg").className = "msg"; $("bj-msg").textContent = "Invalid bet or insufficient Xergs!"; }
-        return;
-      }
-      updateXergsDisplay(bal - bjBet);
-
-      createDeck();
-      bjPlayer = [bjDeck.pop(), bjDeck.pop()];
-      bjDealer = [bjDeck.pop(), bjDeck.pop()];
-      bjActive = true;
-
-      renderHand(bjPlayer, "bj-player-cards");
-      renderHand(bjDealer, "bj-dealer-cards", true);
-      if ($("bj-player-score")) $("bj-player-score").textContent = getHandScore(bjPlayer);
-      if ($("bj-dealer-score")) $("bj-dealer-score").textContent = "?";
-      if ($("bj-msg")) { $("bj-msg").className = "msg ok"; $("bj-msg").textContent = "Wagered " + bjBet + " Xergs. Hit or Stand?"; }
-
-      $("bj-deal").disabled = true;
-      if ($("bj-hit")) $("bj-hit").disabled = false;
-      if ($("bj-stand")) $("bj-stand").disabled = false;
-    };
+  function renderBlackjack(result,action){
+    renderHand(result.player,"bj-player-cards"); renderHand(result.dealer,"bj-dealer-cards");
+    $("bj-player-score").textContent=result.player_score??"0";
+    $("bj-dealer-score").textContent=result.active?"?":result.dealer_score??"0";
+    $("bj-deal").disabled=!!result.active;
+    $("bj-hit").disabled=$("bj-stand").disabled=!result.active;
+    if(result.active)casinoMessage("blackjack","Wagered "+result.bet+" Xergs. Hit or stand?",true);
+    else if(action!=="status"){
+      var message=result.payout===0?"Lost "+result.bet+" Xergs.":result.payout===result.bet?"Push. Bet refunded.":"Won "+result.payout+" Xergs!";
+      casinoMessage("blackjack",message,result.payout>0);
+    }
   }
-
-  if ($("bj-hit")) {
-    $("bj-hit").onclick = function() {
-      if (!bjActive) return;
-      bjPlayer.push(bjDeck.pop());
-      renderHand(bjPlayer, "bj-player-cards");
-      var score = getHandScore(bjPlayer);
-      if ($("bj-player-score")) $("bj-player-score").textContent = score;
-
-      if (score > 21) {
-        if ($("bj-msg")) { $("bj-msg").className = "msg"; $("bj-msg").textContent = "Bust! Score " + score + ". Lost " + bjBet + " Xergs."; }
-        bjActive = false;
-        settle("blackjack", bjBet, 0);
-        $("bj-deal").disabled = false;
-        $("bj-hit").disabled = true;
-        $("bj-stand").disabled = true;
-      }
-    };
-  }
-
-  if ($("bj-stand")) {
-    $("bj-stand").onclick = function() {
-      if (!bjActive) return;
-      bjActive = false;
-      renderHand(bjDealer, "bj-dealer-cards", false);
-      var dScore = getHandScore(bjDealer);
-
-      while (dScore < 17) {
-        bjDealer.push(bjDeck.pop());
-        dScore = getHandScore(bjDealer);
-      }
-
-      renderHand(bjDealer, "bj-dealer-cards", false);
-      if ($("bj-dealer-score")) $("bj-dealer-score").textContent = dScore;
-      var pScore = getHandScore(bjPlayer);
-
-      if (dScore > 21 || pScore > dScore) {
-        var win = bjBet * 2;
-        updateXergsDisplay(getBalance() + win);
-        settle("blackjack", bjBet, win);
-        if ($("bj-msg")) { $("bj-msg").className = "msg ok"; $("bj-msg").textContent = "You win! Won " + win + " Xergs!"; }
-      } else if (pScore === dScore) {
-        updateXergsDisplay(getBalance() + bjBet);
-        settle("blackjack", bjBet, bjBet);
-        if ($("bj-msg")) { $("bj-msg").className = "msg ok"; $("bj-msg").textContent = "Push! Refunded " + bjBet + " Xergs."; }
-      } else {
-        settle("blackjack", bjBet, 0);
-        if ($("bj-msg")) { $("bj-msg").className = "msg"; $("bj-msg").textContent = "Dealer wins. Lost " + bjBet + " Xergs."; }
-      }
-
-      $("bj-deal").disabled = false;
-      $("bj-hit").disabled = true;
-      $("bj-stand").disabled = true;
-    };
+  $("bj-deal").onclick=function(){casinoAction("blackjack","start",Number($("bj-bet").value),null,renderBlackjack);};
+  $("bj-hit").onclick=function(){casinoAction("blackjack","hit",null,null,renderBlackjack);};
+  $("bj-stand").onclick=function(){casinoAction("blackjack","stand",null,null,renderBlackjack);};
+  async function restoreCasino(){
+    // Serial requests avoid showing an earlier balance snapshot last.
+    await casinoAction("mines","status",null,null,renderMines);
+    await casinoAction("blackjack","status",null,null,renderBlackjack);
   }
 
   var gift = { endAt: 0, reward: 100, timer: null };
@@ -2043,7 +1834,7 @@ input::placeholder{color:var(--muted);opacity:.8}
           var title=document.createElement('strong');title.textContent=assetName(a.kind);card.appendChild(title);
           var detail=document.createElement('p');detail.style.cssText='margin:7px 0;color:#d4dfed;font-size:13px';detail.textContent=assetStats(a.kind)+(a.expires_at?' · '+Math.max(0,Math.ceil((Date.parse(a.expires_at)-Date.now())/60e3))+' min remaining':'');card.appendChild(detail);
           var place=document.createElement('div');place.style.cssText='font-size:12px;color:#e1efff';place.textContent=a.plot_key?'📍 '+a.plot_key:'Not placed';card.appendChild(place);
-          if(false){var btn=document.createElement('button');btn.className='mini';btn.style.marginTop='7px';btn.textContent=a.plot_key?'Move to selected land':'Place on selected land';btn.onclick=async function(){var chosen=landSelected||landFirstPlot;var key=chosen&&chosen.properties&&chosen.properties.plot_key;var ss=loadSession();if(!key||!landHoldings[key]||landHoldings[key].owner_id!==landUserId){$('warfareAssetPlaceMsg').textContent='Select one of your owned land plots first.';return;}if(!nativePlotIsSafe(key)){$('warfareAssetPlaceMsg').textContent='Cannot place equipment over water.';return;}btn.disabled=true;try{var res=await api('/rest/v1/rpc/warfare_place_asset','POST',{p_id:a.id,p_plot_key:key},ss.access_token);$('warfareAssetPlaceMsg').textContent=res.data&&res.data.ok?'Placed '+assetName(a.kind)+' on '+key:(res.data.error||res.data.message||'Placement failed');await warfareRefreshAssets();}finally{btn.disabled=false;}};card.appendChild(btn);}
+          if(a.owner_id===landUserId){var btn=document.createElement('button');btn.className='mini';btn.style.marginTop='7px';btn.textContent=a.plot_key?'Move to selected land':'Place on selected land';btn.onclick=async function(){var chosen=landSelected||landFirstPlot;var key=chosen&&chosen.properties&&chosen.properties.plot_key;var ss=loadSession();if(!key||!landHoldings[key]||landHoldings[key].owner_id!==landUserId){$('warfareAssetPlaceMsg').textContent='Select one of your owned land plots first.';return;}if(!nativePlotIsSafe(key)){$('warfareAssetPlaceMsg').textContent='Cannot place equipment over water.';return;}btn.disabled=true;try{var res=await api('/rest/v1/rpc/warfare_place_asset','POST',{p_id:a.id,p_plot_key:key},ss.access_token);$('warfareAssetPlaceMsg').textContent=res.data&&res.data.ok?'Placed '+assetName(a.kind)+' on '+key:(res.data.error||res.data.message||'Placement failed');await warfareRefreshAssets();}catch(e){$('warfareAssetPlaceMsg').textContent=e.message;}finally{btn.disabled=false;}};card.appendChild(btn);}
           holder.appendChild(card);
         });
       }
@@ -2503,38 +2294,6 @@ input::placeholder{color:var(--muted);opacity:.8}
     if(!nativeIsLand(landLon(x),landLat(y)))return nativePlotPosition(st.key);
     return nativeProject(landLat(y),landLon(x));
   }
-  var lastSafePlotUpload=0,safeUploadBusy=false;
-  async function registerLandSafeFrontier(){
-    if(safeUploadBusy||!nativeMaskPixels||!landUserId||Date.now()-lastSafePlotUpload<12000)return;
-    var session=loadSession();if(!session||!session.access_token)return;
-    safeUploadBusy=true;lastSafePlotUpload=Date.now();
-    try{
-      var seen=new Set(),candidate=[];
-      // Register a validated buffer ahead of the frontier, not just the
-      // immediately adjacent ring. This keeps the server supplied with safe
-      // land while the player's troops expand rapidly or the tab is idle.
-      var frontier=landOwnedKeys().filter(function(k){return /^plot:\\d+:\\d+$/.test(k);});
-      frontier.forEach(function(k){seen.add(k);});
-      for(var ring=0;ring<12 && frontier.length && candidate.length<12000;ring++){
-        var next=[];
-        frontier.forEach(function(own){
-          landAdjacentKey(own).forEach(function(k){
-            if(seen.has(k))return;
-            seen.add(k);
-            if(landHoldings[k])return;
-            if(!nativePlotIsSafe(k))return; // Never register water.
-            candidate.push(k);next.push(k);
-          });
-        });
-        frontier=next;
-      }
-      for(var offset=0;offset<candidate.length;offset+=1800){
-        var result=await api('/rest/v1/rpc/warfare_register_safe_plots','POST',{p_keys:candidate.slice(offset,offset+1800)},session.access_token);
-        if(!result.ok||!result.data||!result.data.ok){console.warn('Land-mask registration failed',result.data);break;}
-      }
-    }catch(e){console.warn('Land-mask registration failed',e);}
-    finally{safeUploadBusy=false;}
-  }
   function drawXernSoldier(ctx,w,pos,sz){
     var u=w.unit||{},rarity=String(u.rarity||'common').toLowerCase(),kind=String(u.unit_type||'trooper').toLowerCase();
     var colors={common:'#aeb9ca',rare:'#43a7ff',epic:'#c083ff',legendary:'#ffc44b',mythical:'#ff668e'};
@@ -2761,7 +2520,6 @@ input::placeholder{color:var(--muted);opacity:.8}
     liveWarBar.style.pointerEvents='none';
   }
   var lastLiveWarId=null,lastLiveWarRound=-1,liveWarPending=false;
-  setInterval(function(){if(!document.hidden&&landMapReady&&loadSession())registerLandSafeFrontier();},14000);
   async function syncLiveWar(){
     var session=loadSession();if(document.hidden||liveWarPending||!session||!session.access_token)return;
     liveWarPending=true;
@@ -2809,7 +2567,8 @@ input::placeholder{color:var(--muted);opacity:.8}
     var cmd=$('squadCommand').value,target=$('squadTarget').value;
     var selected=teamUnits.filter(function(u){return Number(u.unit_count||0)>0&&!!u.stationed_plot_key&&(target==='all'||String(u.id)===target);});
     if(!selected.length){$('landMsg').textContent='No stationed squad members. Station troops on your land before giving commands.';return;}
-    if(cmd==='rally'||cmd==='explore'){
+    if(cmd==='dismiss'&&!confirm('Dismiss one troop from each selected group?'))return;
+    {
       var key=landFirstPlot&&landFirstPlot.properties?landFirstPlot.properties.plot_key:(landSelected&&landSelected.properties?landSelected.properties.plot_key:null);
       if(!key&&landRallyLatLng)key='plot:'+landCellX(landRallyLatLng.lng)+':'+landCellY(landRallyLatLng.lat);
       if(!key&&cmd==='rally'){$('landMsg').textContent='Choose a rally destination on the map first.';return;}
@@ -2825,14 +2584,29 @@ input::placeholder{color:var(--muted);opacity:.8}
           }catch(e){$('landMsg').textContent='Rally failed: '+e.message;return;}
         }
         var successes=0,commandedTroops=0,errors=[];
-        for(var u of selected){try{var r=await api(cmd==='explore'?'/rest/v1/rpc/warfare_set_explore':'/rest/v1/rpc/warfare_set_march','POST',cmd==='explore'?{p_unit_id:u.id}:{p_unit_id:u.id,p_target_plot_key:key},session.access_token);if(r.ok&&r.data&&r.data.ok){successes++;commandedTroops+=Number(u.unit_count||0);}else errors.push(errText(r.data)||'server rejected order');}catch(e){errors.push(e.message);}}
-        $('landMsg').textContent='📣 You have commanded '+commandedTroops.toLocaleString()+' troops across '+successes+' troop groups to '+(cmd==='explore'?'explore new territory':'rally toward '+key)+(errors.length?'. Some orders failed: '+errors.slice(0,2).join(', '):'. Orders confirmed!');
+        if(cmd==='rally'&&target==='all'){
+          successes=selected.length;
+          commandedTroops=Number(rd.troops||0);
+        }else{
+          for(var u of selected){
+            try{
+              var rpc=cmd==='explore'?'warfare_set_explore':cmd==='rally'?'warfare_set_march':'warfare_command';
+              var body={p_unit_id:u.id};
+              if(cmd==='rally')body.p_target_plot_key=key;
+              if(cmd!=='rally'&&cmd!=='explore')body.p_command=cmd;
+              var r=await api('/rest/v1/rpc/'+rpc,'POST',body,session.access_token);
+              if(r.ok&&r.data.ok){successes++;commandedTroops+=cmd==='dismiss'?1:Number(u.unit_count||0);}
+              else errors.push(errText(r.data)||'server rejected order');
+            }catch(e){errors.push(e.message);}
+          }
+        }
+        $('landMsg').textContent=successes?'📣 '+cmd+' confirmed for '+commandedTroops.toLocaleString()+' troops.':'No orders confirmed.';
+        if(errors.length)$('landMsg').textContent+=' '+errors.slice(0,2).join(', ');
         var commandNotice=$('xernCommandNotice');if(!commandNotice){commandNotice=document.createElement('div');commandNotice.id='xernCommandNotice';commandNotice.setAttribute('role','status');$('applyCommand').insertAdjacentElement('afterend',commandNotice);}
         commandNotice.textContent=successes?'📣 '+commandedTroops.toLocaleString()+' TROOPS COMMANDED':'No individual orders confirmed.';commandNotice.style.cssText='margin:10px 0;padding:14px;border:2px solid #6ee7b7;border-radius:12px;background:#123b34;color:#e2fff5;font-size:16px;font-weight:900;text-align:center;box-shadow:0 0 20px #34d39955';
-        await landSyncOtherTroops();landRenderGrid();return;
+        await Promise.allSettled([landSyncOtherTroops(),teamLoad()]);landRenderGrid();return;
       }finally{button.disabled=false;}
     }
-    $('landMsg').textContent=cmd.charAt(0).toUpperCase()+cmd.slice(1)+' is not implemented yet. Use Explore or Rally → to issue a movement order.';
   });
   $('warDoctrine').addEventListener('change',async function(){var v=this.value,ss=loadSession();if(!ss||!ss.access_token)return;try{var r=await api('/rest/v1/rpc/xern_set_war_doctrine','POST',{p_doctrine:v},ss.access_token);$('landMsg').textContent=r.ok&&r.data&&r.data.ok?'⚔️ Doctrine active: '+$('warDoctrine').selectedOptions[0].text:'Could not save doctrine';}catch(e){$('landMsg').textContent='Doctrine save failed: '+e.message;}});
   async function xernLoadDoctrine(){var ss=loadSession();if(!ss||!ss.access_token||!landUserId)return;try{var r=await api('/rest/v1/xern_war_doctrines?select=doctrine&owner_id=eq.'+encodeURIComponent(landUserId),'GET',null,ss.access_token);if(r.ok&&r.data&&r.data[0])$('warDoctrine').value=r.data[0].doctrine;}catch(e){}}
@@ -2846,27 +2620,12 @@ input::placeholder{color:var(--muted);opacity:.8}
     expansionPending=true;
     var generation=sessionGeneration;
     try{
-      var results=await Promise.allSettled(['march','explore','frontier'].map(function(kind){
-        return api('/rest/v1/rpc/warfare_'+kind+'_tick','POST',{},session.access_token);
-      }));
+      var result=await api('/rest/v1/rpc/warfare_frontier_tick','POST',{},session.access_token);
       if(generation!==sessionGeneration)return;
-      var frontier=results[2].value;
-      var battles=results.reduce(function(total,result){
-        var response=result.value;
-        return total+(response&&response.ok?Number(response.data.battles)||0:0);
-      },0);
-      if(battles){
-        var march=warfareMarches.find(function(m){return m.owner_id===landUserId;});
-        if(march)warfareAddCombatFx(march.current_plot_key,'battle');
-        $('landMsg').textContent='⚔️ '+battles+' border battle(s) initiated. Watch the live battle bar.';
-      }else if(frontier&&frontier.ok&&frontier.data.claimed>0){
-        $('landMsg').textContent='🟩 Expanded '+(frontier.data.claimed*5000).toLocaleString()+' acres.';
-      }
-      var failure=results.find(function(result){return !result.value||!result.value.ok||result.value.data.ok===false;});
-      if(failure){
-        $('landMsg').textContent='Warfare update failed: '+(failure.value?(errText(failure.value.data)||('HTTP '+failure.value.status)):failure.reason.message);
-      }
-      if(await landSyncClaimsIfStale(battles||(frontier&&frontier.data.claimed>0)?10000:30000))registerLandSafeFrontier();
+      if(!result.ok||!result.data.ok)throw new Error(errText(result.data)||('HTTP '+result.status));
+      if(result.data.battles)$('landMsg').textContent='⚔️ Border battle started. Watch the live battle bar.';
+      await landSyncClaimsIfStale(result.data.battles||result.data.claimed?5000:15000);
+    }catch(e){if(generation===sessionGeneration)$('landMsg').textContent='Warfare update failed: '+e.message;
     }finally{expansionPending=false;}
   }
   setInterval(pollExpansion,2000);
@@ -3219,10 +2978,10 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   document.getElementById("homeClanRefresh").addEventListener("click",loadHomeClanLeaderboard);
   function clanEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]});}
-  async function clanAction(action,extra){var ss=loadSession();if(!ss)return;var body=Object.assign({p_action:action},extra||{});try{var r=await api('/rest/v1/rpc/xern_clan_action','POST',body,ss.access_token);if(!r.ok||!r.data.ok)throw Error((r.data&&r.data.error)||'Action failed');$('clanStatus').textContent='✓ '+action+' successful';await clanLoad();}catch(e){$('clanStatus').textContent='⚠ '+e.message;}}
+  async function clanAction(action,extra){var ss=loadSession();if(!ss)return;var body=Object.assign({p_action:action},extra||{});try{var r=await api('/rest/v1/rpc/xern_clan_action','POST',body,ss.access_token);if(!r.ok||!r.data.ok)throw Error((r.data&&r.data.error)||'Action failed');$('clanStatus').textContent='✓ '+action+' successful';if(r.data.money!=null)updateXergsDisplay(r.data.money);await clanLoad();}catch(e){$('clanStatus').textContent='⚠ '+e.message;}}
   async function clanLoad(){var ss=loadSession();if(!ss)return;try{
     var t=ss.access_token;await api('/rest/v1/rpc/xern_clan_weekly_payout','POST',{},t);
-    var results=await Promise.all([api('/rest/v1/rpc/xern_clan_strength','POST',{},t),api('/rest/v1/rpc/xern_clan_stats','POST',{},t),api('/rest/v1/xern_clan_members?select=user_id,clan_id','GET',null,t),api('/rest/v1/profiles?select=id,username','GET',null,t),api('/rest/v1/xern_clan_invites?select=id,clan_id,invited_user','GET',null,t)]);
+    var results=await Promise.all([api('/rest/v1/rpc/xern_clan_strength','POST',{},t),api('/rest/v1/rpc/xern_clan_stats','POST',{},t),api('/rest/v1/xern_clan_members?select=user_id,clan_id','GET',null,t),api('/rest/v1/rpc/xern_player_directory','POST',{},t),api('/rest/v1/xern_clan_invites?select=id,clan_id,invited_user','GET',null,t)]);
     var clanStrength={};if(results[0].ok&&Array.isArray(results[0].data))results[0].data.forEach(function(z){clanStrength[z.clan_id]=z});var clans=Array.isArray(results[1].data)?results[1].data:[],members=Array.isArray(results[2].data)?results[2].data:[],profiles=Array.isArray(results[3].data)?results[3].data:[],invites=Array.isArray(results[4].data)?results[4].data:[];
     var names={};profiles.forEach(function(p){names[p.id]=p.username});clanData=clans;clanColorsByOwner={};members.forEach(function(m){var c=clans.find(function(z){return z.id===m.clan_id});if(c)clanColorsByOwner[m.user_id]=c.color;});
     var user=ss.user&&ss.user.id; if(!user){var parts=ss.access_token.split('.');try{user=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))).sub}catch(e){}}
@@ -3248,8 +3007,8 @@ input::placeholder{color:var(--muted);opacity:.8}
     var editor=$('xernAnnouncementEditor');editor.hidden=true;
     if(!ss||!token)return;
     try{
-      var me=await api('/auth/v1/user','GET',null,token);
-      editor.hidden=!(me.ok&&me.data&&me.data.id==='3f98597b-dd10-4989-b840-3f08201c2a6b');
+      var me=await api('/rest/v1/rpc/xern_is_owner','POST',{},token);
+      editor.hidden=!(me.ok&&me.data===true);
     }catch(e){editor.hidden=true;}
   }
   $('xernAnnouncementRefresh').addEventListener('click',xernLoadAnnouncement);
@@ -3268,7 +3027,6 @@ input::placeholder{color:var(--muted);opacity:.8}
   });
   
   xernLoadAnnouncement();
-  var XERN_OWNER_ID='3f98597b-dd10-4989-b840-3f08201c2a6b';
   async function ownerLoadPageIntro(){
     var ss=loadSession(),token=ss&&ss.access_token;
     try{
@@ -3294,8 +3052,8 @@ input::placeholder{color:var(--muted);opacity:.8}
     var sess=loadSession(),inbox=$("ownerInbox"),items=$("ownerInboxItems");
     if(!sess||!sess.access_token){inbox.hidden=true;$('ownerIntroEditor').hidden=true;return;}
     try{
-      var me=await api('/auth/v1/user','GET',null,sess.access_token);
-      if(!me.ok||!me.data||me.data.id!==XERN_OWNER_ID){inbox.hidden=true;$('ownerIntroEditor').hidden=true;return;}
+      var me=await api('/rest/v1/rpc/xern_is_owner','POST',{},sess.access_token);
+      if(!me.ok||me.data!==true){inbox.hidden=true;$('ownerIntroEditor').hidden=true;return;}
       inbox.hidden=false;$('ownerIntroEditor').hidden=false;items.textContent='Loading messages…';
       var r=await api('/rest/v1/rpc/xern_read_owner_messages','POST',{},sess.access_token);
       if(!r.ok){items.textContent='Could not load inbox: '+errText(r.data);return;}
@@ -3324,6 +3082,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     if(p === "airdrops") refreshAirdrops();
     if(p === "stocks") stkOpen();
     if(p === "team") { teamRender(); teamLoad(); }
+    if(p === "casino") restoreCasino();
     if(p === "allies") clanLoad();
     if(p === "warfare") { landRefreshPanel(); clanLoad(); }
     if(p === "owner") {ownerLoadPageIntro();ownerRefreshInbox();}
@@ -3381,20 +3140,13 @@ input::placeholder{color:var(--muted);opacity:.8}
     try{
       var res;
       if(mode === "join"){
-        res = await api("/auth/v1/signup", "POST", { email: email, password: pass, data: { username: user } });
-        if(!res.ok){
-          var t = errText(res.data);
-          if(res.status>=500)return fail("Account creation is temporarily unavailable (HTTP "+res.status+"). Try again shortly.");
-          return fail(/already/i.test(t) ? "That username is taken. Try another." : (t || "Couldn’t create the account."));
-        }
-        if(!res.data.access_token){
-          return fail("Account created, but Supabase still requires email confirmation. Turn off “Confirm email” in your Supabase settings.");
-        }
-      } else {
-        res = await api("/auth/v1/token?grant_type=password", "POST", { email: email, password: pass });
-        if(!res.ok){
-          return fail(res.status===429 ? "Too many login attempts. Wait a minute and retry." : res.status>=500 ? "Login server is temporarily unavailable (HTTP "+res.status+"). Try again shortly." : /confirm/i.test(errText(res.data)) ? "Supabase requires email confirmation." : res.status===400||res.status===401 ? "Username or password is incorrect." : "Login failed (HTTP "+res.status+"): "+(errText(res.data)||"Please retry."));
-        }
+        res = await api("/functions/v1/xern-register", "POST", { username:user, password:pass });
+        if(!res.ok)return fail(errText(res.data)||"Couldn’t create the account.");
+        setMode("login");
+      }
+      res = await api("/auth/v1/token?grant_type=password", "POST", { email: email, password: pass });
+      if(!res.ok){
+        return fail(res.status===429 ? "Too many login attempts. Wait a minute and retry." : res.status>=500 ? "Login server is temporarily unavailable (HTTP "+res.status+"). Try again shortly." : /confirm/i.test(errText(res.data)) ? "Supabase requires email confirmation." : res.status===400||res.status===401 ? "Username or password is incorrect." : "Login failed (HTTP "+res.status+"): "+(errText(res.data)||"Please retry."));
       }
       if(!res.data.access_token)throw new Error("The server returned no session.");
       sessionGeneration++;
@@ -3423,7 +3175,8 @@ input::placeholder{color:var(--muted);opacity:.8}
     landRallyLatLng=null;
     teamUnits=[];
     nativeMarkers=[]; nativeOtherTroops=[]; nativeEnemyWalkers=[]; warfareMarches=[];
-    bActive=false; bjActive=false;
+    if(plinkoAnimation)cancelAnimationFrame(plinkoAnimation);
+    plinkoAnimation=0; renderMines({},"status"); renderBlackjack({},"status");
     ["plinko-drop","bomb-start","bj-deal"].forEach(function(id){$(id).disabled=false;});
     ["bomb-cashout","bj-hit","bj-stand"].forEach(function(id){$(id).disabled=true;});
     if(liveWarBar)liveWarBar.style.display='none';
@@ -3443,20 +3196,38 @@ input::placeholder{color:var(--muted);opacity:.8}
     showLogin();
     if(s&&s.access_token)request("/auth/v1/logout?scope=local", "POST", null, s.access_token).catch(function(){});
   };
-})();
-</script>
-<script>
-(function(){
- var amount=document.getElementById('giftAmount');if(!amount)return;
- function update(){var raw=amount.value.trim();var valid=/^[0-9]+$/.test(raw);var n=valid?Number(raw):0;
- var fee=Number.isSafeInteger(n)&&n>0?Math.ceil(n*0.0005):0;
- var good=Number.isSafeInteger(n)&&n>0&&n<=1e12;
- document.getElementById('giftNet').textContent=good?n.toLocaleString()+' Xergs':'0 Xergs';
- document.getElementById('giftFee').textContent=good?fee.toLocaleString()+' Xergs':'0 Xergs';
- document.getElementById('giftTotal').textContent=good?(n+fee).toLocaleString()+' Xergs':'0 Xergs';
- document.getElementById('giftStatus').textContent=!good&&raw?'Enter a whole-number gift between 1 and 1 trillion Xergs.':'The transfer service is not yet enabled. This calculator does not move money.';
- }
- amount.addEventListener('input',update);update();
+  var transferRequest=null, transferBusy=false;
+  function transferAmount(){
+    var value=$('giftAmount').value.trim();
+    var n=/^[0-9]+$/.test(value)?Number(value):0;
+    return Number.isSafeInteger(n)&&n>0&&n<=1e12?n:0;
+  }
+  function updateTransfer(){
+    var amount=transferAmount(), fee=Math.ceil(amount/2000);
+    $('giftNet').textContent=fm(amount,0)+' Xergs';
+    $('giftFee').textContent=fm(fee,0)+' Xergs';
+    $('giftTotal').textContent=fm(amount+fee,0)+' Xergs';
+    $('giftSubmit').disabled=transferBusy||!amount||!/^[A-Za-z0-9_]{3,24}$/.test($('giftRecipient').value.trim());
+  }
+  $('giftRecipient').addEventListener('input',updateTransfer);
+  $('giftAmount').addEventListener('input',updateTransfer);
+  $('giftSubmit').addEventListener('click',async function(){
+    var session=loadSession(), generation=sessionGeneration, amount=transferAmount(), name=$('giftRecipient').value.trim();
+    if(transferBusy||!session||!amount)return;
+    if(!confirm('Send '+fm(amount,0)+' Xergs to '+name+'?'))return;
+    var fingerprint=[generation,name.toLowerCase(),amount].join(':');
+    if(!transferRequest||transferRequest.fingerprint!==fingerprint)transferRequest={fingerprint:fingerprint,id:crypto.randomUUID()};
+    transferBusy=true; updateTransfer();
+    try{
+      var result=await api('/rest/v1/rpc/xern_gift_player','POST',
+        {p_username:name,p_amount:amount,p_request_id:transferRequest.id},session.access_token);
+      if(!result.ok||!result.data.ok)throw new Error(errText(result.data)||'Transfer unavailable');
+      updateXergsDisplay(result.data.money);
+      $('giftStatus').textContent='Sent '+fm(amount,0)+' Xergs to '+name+'.';
+      transferRequest=null; $('giftAmount').value='';
+    }catch(e){if(generation===sessionGeneration)$('giftStatus').textContent=e.message+' Retry the same gift to check its result.';}
+    finally{transferBusy=false;updateTransfer();}
+  });
 })();
 </script>
 <style>

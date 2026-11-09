@@ -1,0 +1,10 @@
+{
+  "name": "xern-backend-tests",
+  "private": true,
+  "scripts": {
+    "test": "node tests/backend.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15"
+  }
+}
