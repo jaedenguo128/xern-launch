@@ -11,13 +11,24 @@ try{
  await exec(`create role anon; create role authenticated; create role service_role;
  create schema auth; create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb,raw_app_meta_data jsonb);
  create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
- grant usage on schema auth to authenticated,anon,service_role;`);
+ grant usage on schema auth to authenticated,anon,service_role;
+ create schema cron;
+ create function cron.schedule(text,text,text) returns bigint language sql as $$select 1::bigint$$;`);
  for(const file of (await readdir(new URL('../bootstrap/',import.meta.url))).sort()){
   if(file.startsWith('08'))continue;
   await exec(await readFile(new URL('../bootstrap/'+file,import.meta.url),'utf8'));
   console.log('Applied '+file);
  }
- await db.query(`insert into auth.users values ($1,'alpha@players.example.com','{"username":"Alpha"}','{"xern_registration":true}'),($2,'bravo@players.example.com','{"username":"Bravo"}','{"xern_registration":true}')`,[u,v]);
+ const nonceA='00000000-0000-4000-8000-0000000000a1',nonceB='00000000-0000-4000-8000-0000000000b1';
+ await exec('set role service_role');
+ assert(await call('xern_prepare_signup',['Alpha',nonceA]));
+ assert(await call('xern_prepare_signup',['Bravo',nonceB]));
+ await admin();
+ await assert.rejects(db.query(`insert into auth.users values ($1,'alpha@players.example.com','{"username":"Alpha"}','{}')`,[u]),/Invalid Xern registration/);
+ await db.query(`insert into auth.users values
+   ($1,'alpha@players.example.com',jsonb_build_object('username','Alpha','xern_proof',$3::text),'{}'),
+   ($2,'bravo@players.example.com',jsonb_build_object('username','Bravo','xern_proof',$4::text),'{}')`,[u,v,nonceA,nonceB]);
+ assert.equal((await db.query('select count(*)::integer n from xern_private.signup_proofs')).rows[0].n,0);
  await exec('set role anon');
  assert.equal(typeof await call('xern_get_home_announcement'),'string');
  await assert.rejects(call('gift_status'),/permission denied/);

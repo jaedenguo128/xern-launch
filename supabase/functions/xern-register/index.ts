@@ -34,12 +34,17 @@ Deno.serve(async (request: Request) => {
     });
     if (!limit.ok) return reply(503, "Registration is temporarily unavailable.");
     if (!(await limit.json())) return reply(429, "Too many registrations. Try again later.");
+    const proof = crypto.randomUUID();
+    const reservation = await fetch(apiUrl + "/rest/v1/rpc/xern_prepare_signup", {
+      method: "POST", headers: adminHeaders, body: JSON.stringify({ p_username: username, p_proof: proof }),
+    });
+    if (!reservation.ok || !(await reservation.json())) return reply(503, "Registration is temporarily unavailable.");
     // The game uses private username aliases in place of a real email address.
     const user = await fetch(apiUrl + "/auth/v1/admin/users", {
       method: "POST", headers: adminHeaders,
       body: JSON.stringify({
         email: username.toLowerCase() + "@players.example.com",
-        password, email_confirm: true, user_metadata: { username }, app_metadata: { xern_registration: true },
+        password, email_confirm: true, user_metadata: { username, xern_proof: proof },
       }),
     });
     if (user.ok) return reply(201, "Account created");

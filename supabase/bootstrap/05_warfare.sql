@@ -85,6 +85,7 @@ $$;
 create table xern_private.asset_catalog (
   kind text primary key, price integer not null, hours integer, hp integer not null, attack integer not null
 );
+alter table xern_private.asset_catalog enable row level security;
 insert into xern_private.asset_catalog values
   ('tank',5000,1,650,160),('tower',4000,null,340,85),('bush',2500,null,230,45),
   ('radar',6500,null,0,0),('truck',7000,1,260,40),('fortress',9000,null,950,65),('mine',8500,null,0,0);
