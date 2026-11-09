@@ -1865,7 +1865,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   });
 
   document.querySelectorAll('.warfare-buy-asset').forEach(function(btn){btn.addEventListener('click',async function(){var ss=loadSession();if(!ss||!ss.access_token){$('warfareAssetMarketMsg').textContent='Sign in to purchase.';return;}btn.disabled=true;try{var r=await api('/rest/v1/rpc/warfare_buy_asset','POST',{p_kind:btn.dataset.kind},ss.access_token),d=r.data||{};$('warfareAssetMarketMsg').textContent=d.ok?'Purchased '+assetName(btn.dataset.kind)+'! '+(btn.dataset.kind==='tank'?'Tank is active for one hour.':'Automatically placed on your land.'):(d.error||d.message||'Purchase failed');if(d.ok){await warfareRefreshAssets();await refreshMarketSlots();if(typeof greet==='function')greet();}}catch(e){$('warfareAssetMarketMsg').textContent=e.message;}finally{btn.disabled=false;}});});
-  setInterval(function(){if(loadSession()&&!$('page-warfare').hidden)warfareRefreshAssets();},12000);
+  setInterval(function(){if(!document.hidden&&loadSession()&&!$('page-warfare').hidden)warfareRefreshAssets();},12000);
 
   async function refreshMarketSlots(){
     var ss=loadSession();if(!ss||!ss.access_token)return;
@@ -2502,7 +2502,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       }else{xernConfirmedRallyTarget=null;$('rallyColonyStatus').hidden=true;}
     }catch(e){}
   }
-  setInterval(function(){if(!$('page-warfare').hidden)refreshColonyRallyStatus();},12000);
+  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden)refreshColonyRallyStatus();},30000);
 
   $('mapZoomIn').addEventListener('click',function(){if(landMap)landMap.zoomIn();});
   $('mapZoomOut').addEventListener('click',function(){if(landMap)landMap.zoomOut();});
@@ -2519,9 +2519,10 @@ input::placeholder{color:var(--muted);opacity:.8}
     liveWarBar.style.zIndex='99999';liveWarBar.style.boxShadow='0 10px 38px #000a';
     liveWarBar.style.pointerEvents='none';
   }
-  var lastLiveWarId=null,lastLiveWarRound=-1,liveWarPending=false;
-  async function syncLiveWar(){
-    var session=loadSession();if(document.hidden||liveWarPending||!session||!session.access_token)return;
+  var lastLiveWarId=null,lastLiveWarRound=-1,liveWarPending=false,nextBattleCheckAt=0;
+  async function syncLiveWar(force){
+    var session=loadSession();if(document.hidden||liveWarPending||!session||!session.access_token||(!force&&Date.now()<nextBattleCheckAt))return;
+    nextBattleCheckAt=Date.now()+12000;
     liveWarPending=true;
     try{
       var uid=(session.user&&session.user.id)||landUserId;
@@ -2547,6 +2548,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       var rosterDetail=myRoster.map(function(t){return t.unit_name+' '+Number(t.unit_count)+'×'+Number(t.health)+' HP';}).join(' · ');
 
       if(b.status==='active'){
+        nextBattleCheckAt=Date.now();
         $('battleResult').textContent='ROUND '+b.round_no+' · '+Math.round(myHp).toLocaleString()+' HP vs '+Math.round(theirHp).toLocaleString()+' HP · Next round in about 2 seconds'+(rosterDetail?' · Your roster: '+rosterDetail+' = '+rosterHp.toLocaleString()+' HP':'');
       }else{
         var won=b.winner===(mineAttacks?'attacker':'defender');
@@ -2610,37 +2612,29 @@ input::placeholder{color:var(--muted);opacity:.8}
   });
   $('warDoctrine').addEventListener('change',async function(){var v=this.value,ss=loadSession();if(!ss||!ss.access_token)return;try{var r=await api('/rest/v1/rpc/xern_set_war_doctrine','POST',{p_doctrine:v},ss.access_token);$('landMsg').textContent=r.ok&&r.data&&r.data.ok?'⚔️ Doctrine active: '+$('warDoctrine').selectedOptions[0].text:'Could not save doctrine';}catch(e){$('landMsg').textContent='Doctrine save failed: '+e.message;}});
   async function xernLoadDoctrine(){var ss=loadSession();if(!ss||!ss.access_token||!landUserId)return;try{var r=await api('/rest/v1/xern_war_doctrines?select=doctrine&owner_id=eq.'+encodeURIComponent(landUserId),'GET',null,ss.access_token);if(r.ok&&r.data&&r.data[0])$('warDoctrine').value=r.data[0].doctrine;}catch(e){}}
-  setInterval(function(){if(!$('page-warfare').hidden)xernLoadDoctrine();},30000);setTimeout(xernLoadDoctrine,1500);
+  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden)xernLoadDoctrine();},30000);setTimeout(xernLoadDoctrine,1500);
   $('landRefresh').addEventListener('click',function(){landSyncClaims(true);});
   $('landSelectRally').addEventListener('click',function(){landTool='rally';$('squadCommand').value='rally';landFirstPlot=null;landSecondPlot=null;landSelected=null;landRefreshStyles();landRefreshPanel();$('landMsg').textContent='RALLY: select a destination tile to send your stationed colony troops expanding in that direction. EXPLORE: choose Explore and issue an order; no destination required.';});
-  var expansionPending=false;
-  async function pollExpansion(){
-    var session=loadSession();
-    if(expansionPending||document.hidden||$('page-warfare').hidden||!landMapReady||!session)return;
-    expansionPending=true;
-    var generation=sessionGeneration;
-    try{
-      var result=await api('/rest/v1/rpc/warfare_frontier_tick','POST',{},session.access_token);
-      if(generation!==sessionGeneration)return;
-      if(!result.ok||!result.data.ok)throw new Error(errText(result.data)||('HTTP '+result.status));
-      if(result.data.battles)$('landMsg').textContent='⚔️ Border battle started. Watch the live battle bar.';
-      await landSyncClaimsIfStale(result.data.battles||result.data.claimed?5000:15000);
-    }catch(e){if(generation===sessionGeneration)$('landMsg').textContent='Warfare update failed: '+e.message;
-    }finally{expansionPending=false;}
-  }
-  setInterval(pollExpansion,2000);
+  // The scheduled world job advances troops and battles for all players.
+  // Open map tabs only read the resulting ownership changes.
+  setInterval(function(){
+    if(!$('page-warfare').hidden)landSyncClaimsIfStale(14000);
+  },15000);
   // On return from a background tab, catch up without waiting for the next poll.
   document.addEventListener('visibilitychange',function(){
     if(document.hidden||!loadSession())return;
-    syncLiveWar();
+    syncLiveWar(true);
     if($('page-warfare').hidden||!landMapReady)return;
     landSyncClaimsIfStale(5000);
     landSyncOtherTroops();
     teamLoad();
   });
-  // Keep eliminated owners' labels from lingering when a battle ends while the map is open.
-  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady)landSyncClaimsIfStale(30000);},30000);
-  setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession()){landSyncOtherTroops();if(!$('warfareRoster').contains(document.activeElement))teamLoad();}},6000);
+  setInterval(function(){
+    if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession())landSyncOtherTroops();
+  },12000);
+  setInterval(function(){
+    if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession()&&!$('warfareRoster').contains(document.activeElement))teamLoad();
+  },30000);
   // Animate rallied characters independently of server-controlled expansion cadence.
   setInterval(function(){if(!document.hidden&&!$('page-warfare').hidden&&nativeReady&&(nativeMarkers.length||nativeEnemyWalkers.length))landRenderGrid();},65);
   $('landBuy').addEventListener('click',async function(){
@@ -2839,32 +2833,14 @@ input::placeholder{color:var(--muted);opacity:.8}
   async function warfareTick(){
     if(warfareTick.busy)return;warfareTick.busy=true;
     var s=loadSession();if(!s||!s.access_token){warfareTick.busy=false;return;}
-    // Match Capture the World's frontier behavior: expansion candidates come from
-    // the edges of owned territory, not only from whatever happens to be visible
-    // at the current map zoom. The server still validates every claim and requires
-    // each new plot to touch existing territory.
-    var keys=[],names=[],seen=Object.create(null),owned=landOwnedKeys();
-    owned.forEach(function(ownKey){
-      landAdjacentKey(ownKey).forEach(function(key){
-        if(seen[key]||landHoldings[key])return;
-        var c=landPlotCoords(key);if(!c)return;
-        var lon=landLon(c.x+.5),lat=landLat(c.y+.5);
-        if(!nativePlotIsSafe(key))return;
-        var country=landCountryAt(lon,lat)||'Land';
-        seen[key]=true;keys.push(key);names.push(landPlotName({x:c.x,y:c.y,country:country}));
-      });
-    });
-    if(keys.length){
-      var positions=warfareMarches.filter(function(m){return m.owner_id===landUserId;}).map(function(m){return landPlotCoords(m.current_plot_key);}).filter(Boolean);
-      if(!positions.length)positions=teamUnits.filter(function(u){return u.stationed_plot_key&&u.unit_count>0;}).map(function(u){return landPlotCoords(u.stationed_plot_key);}).filter(Boolean);
-      if(positions.length){
-      var ranked=keys.map(function(k,i){var c=landPlotCoords(k),distance=positions.reduce(function(best,p){return Math.min(best,Math.abs(c.x-p.x)+Math.abs(c.y-p.y));},1e9);return {key:k,name:names[i],distance:distance};});
-      ranked.sort(function(a,b){return a.distance-b.distance;});
-      keys=ranked.map(function(v){return v.key;});names=ranked.map(function(v){return v.name;});}
+    try{
+      // This RPC settles the player's Gold income. The world job owns expansion.
+      var r=await api('/rest/v1/rpc/team_warfare_tick','POST',{p_candidate_keys:[],p_candidate_names:[]},s.access_token),d=r.data||{};
+      if(!r.ok||!d.ok){$('landMsg').textContent='Gold income unavailable: '+(errText(d)||('HTTP '+r.status));return;}
+      if(d.gold!=null)updateGoldDisplay(d.gold);
+      warfareRender();
     }
-    keys=keys.slice(0,400);names=names.slice(0,400);
-    try{var r=await api('/rest/v1/rpc/team_warfare_tick','POST',{p_candidate_keys:keys,p_candidate_names:names},s.access_token),d=r.data||{};if(!r.ok||!d.ok){if($('landMsg'))$('landMsg').textContent='Expansion server error: '+(d.error||d.message||('HTTP '+r.status));return;}if(r.ok&&d.ok){if(d.gold!=null)updateGoldDisplay(d.gold);if($('warfareIncome'))$('warfareIncome').textContent=Number(d.gold_per_hour||0).toLocaleString()+' Gold/hr';if(d.claimed_squares>0){await landSyncClaims(false);landRefreshPanel();landRenderRallyMarkers();$('landMsg').textContent='Territory expanded! Your squad pushed the frontier and claimed '+d.claimed_squares+' connected new plot(s) ('+(d.claimed_squares*5000).toLocaleString()+' acres) in your color.';}warfareRender();}}
-    catch(e){if($('landMsg'))$('landMsg').textContent='Expansion request failed: '+String(e.message||e);}
+    catch(e){$('landMsg').textContent='Gold income unavailable: '+String(e.message||e);}
     finally{warfareTick.busy=false;}
   }
   $('warfareRoster').addEventListener('input',function(e){if(e.target.matches('.troop-quantity')){var n=Number(e.target.value);if(Number.isInteger(n)&&n>=1&&n<=50)xernTroopQuantities[e.target.dataset.unit]=n;}});
@@ -3092,7 +3068,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       if(btns[i].getAttribute("data-page") === p) btns[i].setAttribute("aria-current", "page");
       else btns[i].removeAttribute("aria-current");
     }
-    if(p === "warfare") { teamLoad(); landLoadMap(); landRefreshPanel(); landSyncClaims(true); setTimeout(warfareTick,700); }
+    if(p === "warfare") { teamLoad(); landLoadMap(); landRefreshPanel(); landSyncClaims(true); syncLiveWar(true); setTimeout(warfareTick,700); }
   }
   function showApp(name, money){
     $("auth").hidden = true; $("app").hidden = false;
@@ -3170,7 +3146,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     $('warSellMsg').textContent='';
     stk.rows=[]; stk.hold={}; stk.cost={}; stockChartRequest++; drawChart([]); stkRenderList();
     landHoldings={};
-    landClaimsLastApplied=0;
+    landClaimsLastApplied=0; nextBattleCheckAt=0;
     landFirstPlot=landSecondPlot=landSelected=null;
     landRallyLatLng=null;
     teamUnits=[];
