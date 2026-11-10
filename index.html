@@ -1194,6 +1194,9 @@ input::placeholder{color:var(--muted);opacity:.8}
 (function(){
   var URL_BASE = "https://kuxghmfeqzmrggkuiwys.supabase.co";
   var KEY = "sb_publishable_TD9iy_1nNlYfEJJTuI0zmQ_cwdm9E-y";
+  // Set to the verified Worker origin when Cloudflare is ready.
+  var SHARED_READS_URL = "";
+  var edgeRetryAt = 0;
   var STORE = "xern_session:" + new URL(URL_BASE).hostname;
 
   var mode = "login";
@@ -1227,7 +1230,21 @@ input::placeholder{color:var(--muted);opacity:.8}
     return expires && expires*1000<Date.now()+90000;
   }
   function errText(d){ return (d && (d.msg || d.message || d.error_description || d.error)) || ""; }
-  async function request(path, method, body, token){
+  async function request(path, method, body, token, useEdge){
+    // Only callers explicitly marked as shared GET reads can use the Worker.
+    if(useEdge && method==="GET" && token && SHARED_READS_URL && Date.now()>=edgeRetryAt){
+      try{
+        var edge=await fetch(SHARED_READS_URL+path,{
+          headers:{Authorization:"Bearer "+token},signal:AbortSignal.timeout(2500),
+          redirect:"error",credentials:"omit"
+        });
+        if(edge.ok){
+          var rows=await edge.json();
+          if(Array.isArray(rows))return {ok:true,status:edge.status,data:rows};
+        }
+      }catch(e){}
+      edgeRetryAt=Date.now()+60000;
+    }
     var controller=new AbortController();
     var timeout=setTimeout(function(){controller.abort();},15000);
     try{
@@ -1266,7 +1283,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     })();
     try{return await sessionRefreshPromise;}finally{sessionRefreshPromise=null;}
   }
-  async function api(path, method, body, token){
+  async function api(path, method, body, token, useEdge){
     if(!token)return request(path,method,body);
     var session=loadSession(), generation=sessionGeneration;
     function checkSession(){
@@ -1280,7 +1297,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       checkSession();
       if(refreshed)token=refreshed.access_token;
     }
-    var result=await request(path,method,body,token);
+    var result=await request(path,method,body,token,useEdge);
     checkSession();
     var expired=result.status===401||(result.status===403&&/jwt expired|invalid jwt|token.*expired/i.test(errText(result.data)));
     if(expired){
@@ -1687,7 +1704,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   async function stkLoadChart(){
     var s = loadSession(); if(!s || !s.access_token) return;
     var chartRequest=++stockChartRequest;
-    var r = await api("/rest/v1/stock_history?symbol=eq." + encodeURIComponent(stk.sel) + "&select=price&order=created_at.desc&limit=120", "GET", null, s.access_token);
+    var r = await api("/rest/v1/stock_history?symbol=eq." + encodeURIComponent(stk.sel) + "&select=price&order=created_at.desc&limit=120", "GET", null, s.access_token, !stockTrading);
     if(chartRequest===stockChartRequest&&r.ok&&Array.isArray(r.data)){
       drawChart(r.data.map(function(x){return Number(x.price);}).filter(Number.isFinite).reverse());
     }
@@ -1704,7 +1721,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     var s = loadSession(); if(!s || !s.access_token) return;
     var generation=sessionGeneration;
     var results=await Promise.allSettled([
-      api("/rest/v1/stock_quotes?select=symbol,name,price,base_price,depth,price_24h","GET",null,s.access_token),
+      api("/rest/v1/stock_quotes?select=symbol,name,price,base_price,depth,price_24h","GET",null,s.access_token,!stockTrading),
       api("/rest/v1/holdings?select=symbol,shares,cost","GET",null,s.access_token),
       api("/rest/v1/rpc/stock_claim_dividends","POST",{},s.access_token)
     ]);
@@ -1822,10 +1839,10 @@ input::placeholder{color:var(--muted);opacity:.8}
   var warfareAssets=[];
   function assetName(kind){return ({tank:'🪖 Armored Tank',tower:'⚡🗼 Electro Tower',bush:'🌵 Border Bush',radar:'📡 Radar Station',truck:'🚚 Supply Truck',fortress:'🏰 Fortress Wall',mine:'⛏️ Gold Mine'})[kind]||kind;}
   function assetStats(kind){return ({tank:'+650 HP · +160 ATK · 0.75 plots/s',tower:'+340 HP · +85 ATK',bush:'+230 HP · +45 ATK',radar:'50% chance to block incoming bombs and nukes',truck:'+260 HP · +40 ATK · 0.4 plots/s',fortress:'+950 HP · +65 ATK',mine:'Produces 50 Xergs/minute'})[kind]||'';}
-  async function warfareRefreshAssets(){
+  async function warfareRefreshAssets(useEdge){
     var ss=loadSession();if(!ss||!ss.access_token)return;
     try{
-      var r=await api('/rest/v1/warfare_assets?select=id,owner_id,kind,plot_key,expires_at&order=id.asc','GET',null,ss.access_token);
+      var r=await api('/rest/v1/warfare_assets?select=id,owner_id,kind,plot_key,expires_at&order=id.asc','GET',null,ss.access_token,useEdge);
       if(!r.ok||!Array.isArray(r.data))return;
       warfareAssets=r.data.filter(function(a){return !a.expires_at||Date.parse(a.expires_at)>Date.now();});
       var holder=$('warfareAssetStats');if(holder){holder.innerHTML='';var mine=warfareAssets.filter(function(a){return a.owner_id===landUserId;});
@@ -1865,7 +1882,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   });
 
   document.querySelectorAll('.warfare-buy-asset').forEach(function(btn){btn.addEventListener('click',async function(){var ss=loadSession();if(!ss||!ss.access_token){$('warfareAssetMarketMsg').textContent='Sign in to purchase.';return;}btn.disabled=true;try{var r=await api('/rest/v1/rpc/warfare_buy_asset','POST',{p_kind:btn.dataset.kind},ss.access_token),d=r.data||{};$('warfareAssetMarketMsg').textContent=d.ok?'Purchased '+assetName(btn.dataset.kind)+'! '+(btn.dataset.kind==='tank'?'Tank is active for one hour.':'Automatically placed on your land.'):(d.error||d.message||'Purchase failed');if(d.ok){await warfareRefreshAssets();await refreshMarketSlots();if(typeof greet==='function')greet();}}catch(e){$('warfareAssetMarketMsg').textContent=e.message;}finally{btn.disabled=false;}});});
-  setInterval(function(){if(!document.hidden&&loadSession()&&!$('page-warfare').hidden)warfareRefreshAssets();},12000);
+  setInterval(function(){if(!document.hidden&&loadSession()&&!$('page-warfare').hidden)warfareRefreshAssets(true);},12000);
 
   async function refreshMarketSlots(){
     var ss=loadSession();if(!ss||!ss.access_token)return;
@@ -1957,10 +1974,10 @@ input::placeholder{color:var(--muted);opacity:.8}
     if(landClaimsRefreshInFlight)await landClaimsRefreshInFlight;
     return landSyncClaims(false);
   }
-  async function landSyncClaims(showMessage){
+  async function landSyncClaims(showMessage,useEdge){
     // Serialize refreshes: a slow older response must never restore eliminated owners.
     if(landClaimsRefreshInFlight)return landClaimsRefreshInFlight;
-    landClaimsRefreshInFlight=landSyncClaimsFresh(showMessage);
+    landClaimsRefreshInFlight=landSyncClaimsFresh(showMessage,useEdge);
     try{return await landClaimsRefreshInFlight;}finally{landClaimsRefreshInFlight=null;}
   }
   // Avoid duplicate full-world downloads while keeping manual refresh authoritative.
@@ -1968,14 +1985,18 @@ input::placeholder{color:var(--muted);opacity:.8}
     if(document.hidden || !landMapReady || !landSession())return Promise.resolve(false);
     if(landClaimsRefreshInFlight)return landClaimsRefreshInFlight;
     if(landClaimsLastApplied && Date.now()-landClaimsLastApplied<minAgeMs)return Promise.resolve(false);
-    return landSyncClaims(false);
+    return landSyncClaims(false,true);
   }
-  async function landSyncClaimsFresh(showMessage){
+  async function landSyncClaimsFresh(showMessage,useEdge){
     var s=landSession();if(!s||!s.access_token)return false;
     try{var allRows=[],pageSize=1000,lastKey=null;
+      var edgeFirstPage=useEdge&&SHARED_READS_URL&&Object.keys(landHoldings).length<pageSize;
       while(true){
         var cursor=lastKey===null?'':'&country_key=gt.'+encodeURIComponent(lastKey);
-        var r=await api('/rest/v1/land_claims?select=country_key,country_name,owner_id,owner_name,paid,area_km2&order=country_key.asc&limit='+pageSize+cursor,'GET',null,s.access_token);
+        var path='/rest/v1/land_claims?select=country_key,country_name,owner_id,owner_name,paid,area_km2&order=country_key.asc&limit='+pageSize+cursor;
+        var r=await api(path,'GET',null,s.access_token,edgeFirstPage&&!cursor);
+        // Multi-page snapshots read all pages from the origin.
+        if(edgeFirstPage&&!cursor&&Array.isArray(r.data)&&r.data.length===pageSize)r=await api(path,'GET',null,s.access_token);
         if(!r.ok||!Array.isArray(r.data)){if(showMessage)$('landMsg').textContent='Could not refresh shared land ownership. Check your connection.';return false;}
         allRows.push.apply(allRows,r.data);
         if(r.data.length<pageSize)break;
@@ -2222,7 +2243,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   // Shared server roster: every player renders the same troop types and quantities.
   var troopsRefreshPending=false;
-  async function landSyncOtherTroops(){
+  async function landSyncOtherTroops(useEdge){
     var session=loadSession();if(troopsRefreshPending||!session||!session.access_token)return;
     troopsRefreshPending=true;
     try{
@@ -2236,7 +2257,7 @@ input::placeholder{color:var(--muted);opacity:.8}
           var count=Math.min(remaining,Math.max(0,Math.floor(Number(u.unit_count)||0)));visibleByOwner[owner]=(visibleByOwner[owner]||0)+count;
           for(var i=0;i<count;i++)nativeEnemyWalkers.push({id:String(u.id)+':'+i,index:i,unit:u,ownerId:u.owner_id,homeKey:u.stationed_plot_key});
         });
-        var mr=await api('/rest/v1/warfare_marches?select=unit_id,owner_id,current_plot_key,target_plot_key,last_step_at,active,mode','GET',null,session.access_token);
+        var mr=await api('/rest/v1/warfare_marches?select=unit_id,owner_id,current_plot_key,target_plot_key,last_step_at,active,mode','GET',null,session.access_token,useEdge);
         warfareMarches=mr.ok&&Array.isArray(mr.data)?mr.data:[];
         var marchIndex={};warfareMarches.forEach(function(m){marchIndex[m.unit_id]=m;});
         nativeEnemyWalkers.forEach(function(w){var m=marchIndex[w.unit.id];if(m){w.homeKey=m.current_plot_key;w.march=m;}});
@@ -2630,7 +2651,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     teamLoad();
   });
   setInterval(function(){
-    if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession())landSyncOtherTroops();
+    if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession())landSyncOtherTroops(true);
   },12000);
   setInterval(function(){
     if(!document.hidden&&!$('page-warfare').hidden&&landMapReady&&loadSession()&&!$('warfareRoster').contains(document.activeElement))teamLoad();
