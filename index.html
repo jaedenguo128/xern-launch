@@ -1235,7 +1235,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     if(useEdge && method==="GET" && token && SHARED_READS_URL && Date.now()>=edgeRetryAt){
       try{
         var edge=await fetch(SHARED_READS_URL+path,{
-          headers:{Authorization:"Bearer "+token},signal:AbortSignal.timeout(2500),
+          headers:{Authorization:"Bearer "+token},signal:AbortSignal.timeout(6000),
           redirect:"error",credentials:"omit"
         });
         if(edge.ok){
