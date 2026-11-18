@@ -473,6 +473,19 @@ input::placeholder{color:var(--muted);opacity:.8}
 #page-home .wealth-heading h3:after{content:' ❄️';font-size:.8em}
 @media(max-width:620px){#page-home .xern-christmas-home{padding:17px}#page-home .xern-christmas-home .xern-holiday-ornaments{font-size:19px;letter-spacing:4px}}
  .xern-strike-card .xern-nuke-art{width:110px;height:110px;overflow:hidden;border-radius:16px;box-shadow:0 0 20px #ff5d3466;margin:0 auto 12px;}
+
+.airdrop-resume{background:transparent;border:0;color:#e5ffef;text-decoration:underline;font-size:12px;cursor:pointer;margin-top:10px}
+.slot-reel{overflow:hidden;will-change:transform}
+.pick-card{transition:transform .28s ease,background .28s ease;touch-action:manipulation}
+.pick-card.card-open{transform:translateY(-4px) rotateY(0);background:#f3f9ff;color:#102e49}
+.pick-card.card-matched{background:#b6ffd6;color:#124732;border-color:#ffe58b}
+.xern-moving-target{transition:transform .12s;touch-action:manipulation;width:60px;height:60px;padding:0}
+.xern-moving-target:disabled{opacity:.6}
+.falling-ball{transform:translateX(-50%);will-change:left,top}
+.prize-row span{flex:1;padding:6px 0;border-radius:5px;transition:background .2s}
+.prize-row .landing-bin{background:#ffdc63;color:#14372e;box-shadow:0 0 14px #ffdf5e}
+.airdrop-card .game-subtext{min-height:36px}
+
 </style>
 
 <style>
@@ -1070,12 +1083,12 @@ input::placeholder{color:var(--muted);opacity:.8}
   <section class="page" id="page-airdrops" hidden>
     <div class="airdrop-hero"><h2>🪂 XERN AIRDROPS</h2><p>Play quick games to earn real Xergs. Rewards and cooldowns are verified by the server.</p><div class="airdrop-balance">🎁 FREE XERGS · DAILY MINI GAMES</div></div>
     <div class="airdrop-grid interactive-airdrops">
-      <article class="airdrop-card" data-airdrop="case"><h3>📦 CRACK THE CRATE</h3><p>Hit the reinforced crate 5 times to break it open!</p><div class="game-stage"><div class="crate-art" aria-hidden="true">📦</div><div class="crate-progress"><span></span></div><div class="game-subtext">5 hits remaining</div></div><button class="airdrop-play" data-game="case">🔨 SMASH CRATE</button><div class="airdrop-result" data-result="case">Potential reward: 80–350 Xergs · 1 hour cooldown</div></article>
-      <article class="airdrop-card" data-airdrop="deck"><h3>🃏 MYSTERY DECK</h3><p>Pick one of six mystery cards. The server reveals a random 25–150 Xerg payout.</p><div class="game-stage"><div class="deck-stage" role="group" aria-label="Choose a mystery card"><button class="pick-card" data-card="0">✦<small>?</small></button><button class="pick-card" data-card="1">✦<small>?</small></button><button class="pick-card" data-card="2">✦<small>?</small></button><button class="pick-card" data-card="3">✦<small>?</small></button><button class="pick-card" data-card="4">✦<small>?</small></button><button class="pick-card" data-card="5">✦<small>?</small></button></div><div class="game-subtext">Pick any card to reveal the reward</div></div><button class="airdrop-play" data-game="deck" hidden>Draw!</button><div class="airdrop-result" data-result="deck">Potential reward: 25–150 Xergs · 45 min cooldown</div></article>
-      <article class="airdrop-card" data-airdrop="spin"><h3>🎰 SPIN SUPPLY</h3><p>Spin the reels for a random 35–185 Xerg payout. Symbols are for fun; the server determines the reward.</p><div class="game-stage"><div class="slot-reels"><div class="slot-reel">💎</div><div class="slot-reel">⚡</div><div class="slot-reel">🪙</div></div><div class="game-subtext">Pull the lever to spin</div></div><button class="airdrop-play" data-game="spin">🎰 PULL LEVER</button><div class="airdrop-result" data-result="spin">Potential reward: 35–185 Xergs · 30 min cooldown</div></article>
-      <article class="airdrop-card" data-airdrop="bounce"><h3>🔵 DROP ZONE</h3><p>Choose a lane, watch the ball land, and reveal your server-awarded prize (10–30 Xergs).</p><div class="game-stage"><div class="drop-lanes"><button class="drop-lane" data-lane="0">↓</button><button class="drop-lane" data-lane="1">↓</button><button class="drop-lane" data-lane="2">↓</button><button class="drop-lane" data-lane="3">↓</button><button class="drop-lane" data-lane="4">↓</button></div><div class="peg-board"><div class="falling-ball">🔵</div><div class="peg-row">•　•　•　•　•</div><div class="peg-row">　•　•　•　•</div><div class="peg-row">•　•　•　•　•</div><div class="peg-row">　•　•　•　•</div><div class="prize-row"><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span></div></div><div class="game-subtext">Select a lane above</div></div><button class="airdrop-play" data-game="bounce" hidden>Drop!</button><div class="airdrop-result" data-result="bounce">Potential reward: 10–30 Xergs · 3 plays/day · 1 min cooldown</div></article>
-      <article class="airdrop-card" data-airdrop="target"><h3>🎯 TARGET PRACTICE</h3><p>Catch the moving target for a random 8–25 Xerg reward.</p><div class="game-stage"><div class="xern-target-field"><button type="button" class="xern-moving-target" aria-label="Hit target">🎯</button></div><div class="game-subtext">Tap the moving target!</div></div><button class="airdrop-play" data-game="target" hidden>Target</button><div class="airdrop-result" data-result="target">8–25 Xergs · 3 plays/day · 45 sec cooldown</div></article>
-      <article class="airdrop-card" data-airdrop="reaction"><h3>⚡ REACTION RUSH</h3><p>Wait for green and tap! Your reaction time is scored for fun; each valid play awards 10–30 Xergs.</p><div class="game-stage"><button type="button" class="xern-reaction-pad">START</button><div class="game-subtext">Tap START to begin</div></div><button class="airdrop-play" data-game="reaction" hidden>Reaction</button><div class="airdrop-result" data-result="reaction">10–30 Xergs · 3 plays/day · 45 sec cooldown</div></article>
+      <article class="airdrop-card" data-airdrop="case"><h3>📦 CRACK THE CRATE</h3><p>Open the crate, then land 5 strikes. Finish faster for a bigger reward.</p><div class="game-stage"><div class="crate-art" aria-hidden="true">📦</div><div class="crate-progress"><span></span></div><div class="game-subtext">5 hits remaining</div></div><button class="airdrop-play" data-game="case">🔨 OPEN / STRIKE</button><button class="airdrop-resume" data-resume="case">Resume / check result</button><div class="airdrop-result" data-result="case">Play to earn Xergs</div></article>
+      <article class="airdrop-card" data-airdrop="deck"><h3>🃏 MYSTERY DECK</h3><p>Find 3 matching pairs in 6 turns. Remember the cards for a perfect-game bonus.</p><div class="game-stage"><div class="deck-stage" role="group" aria-label="Choose a mystery card"><button class="pick-card" data-card="0">✦<small>?</small></button><button class="pick-card" data-card="1">✦<small>?</small></button><button class="pick-card" data-card="2">✦<small>?</small></button><button class="pick-card" data-card="3">✦<small>?</small></button><button class="pick-card" data-card="4">✦<small>?</small></button><button class="pick-card" data-card="5">✦<small>?</small></button></div><div class="game-subtext">Tap a card to shuffle, then find the pairs</div></div><button class="airdrop-play" data-game="deck" hidden>Draw!</button><button class="airdrop-resume" data-resume="deck">Resume / check result</button><div class="airdrop-result" data-result="deck">Play to earn Xergs</div></article>
+      <article class="airdrop-card" data-airdrop="spin"><h3>🎰 SPIN SUPPLY</h3><p>Match two symbols for 100 Xergs or all three for 350. Every spin pays at least 35.</p><div class="game-stage"><div class="slot-reels"><div class="slot-reel">💎</div><div class="slot-reel">⚡</div><div class="slot-reel">🪙</div></div><div class="game-subtext">Pull the lever to spin</div></div><button class="airdrop-play" data-game="spin">🎰 PULL LEVER</button><button class="airdrop-resume" data-resume="spin">Resume / check result</button><div class="airdrop-result" data-result="spin">Play to earn Xergs</div></article>
+      <article class="airdrop-card" data-airdrop="bounce"><h3>🔵 DROP ZONE</h3><p>Pick a starting lane. Peg bounces guide the ball into the bin that pays your prize.</p><div class="game-stage"><div class="drop-lanes"><button class="drop-lane" data-lane="0">↓</button><button class="drop-lane" data-lane="1">↓</button><button class="drop-lane" data-lane="2">↓</button><button class="drop-lane" data-lane="3">↓</button><button class="drop-lane" data-lane="4">↓</button></div><div class="peg-board"><div class="falling-ball">🔵</div><div class="peg-row">•　•　•　•　•</div><div class="peg-row">　•　•　•　•</div><div class="peg-row">•　•　•　•　•</div><div class="peg-row">　•　•　•　•</div><div class="prize-row"><span>10</span><span>20</span><span>50</span><span>20</span><span>10</span></div></div><div class="game-subtext">Select a lane above</div></div><button class="airdrop-play" data-game="bounce" hidden>Drop!</button><button class="airdrop-resume" data-resume="bounce">Resume / check result</button><div class="airdrop-result" data-result="bounce">Play to earn Xergs</div></article>
+      <article class="airdrop-card" data-airdrop="target"><h3>🎯 TARGET PRACTICE</h3><p>Start, then hit 5 moving targets. The target speeds up. Faster finishes pay more.</p><div class="game-stage"><div class="xern-target-field"><button type="button" class="xern-moving-target" aria-label="Start target practice">▶</button></div><div class="game-subtext">Tap to start, then catch all 5 targets</div></div><button class="airdrop-play" data-game="target" hidden>Target</button><button class="airdrop-resume" data-resume="target">Resume / check result</button><div class="airdrop-result" data-result="target">Play to earn Xergs</div></article>
+      <article class="airdrop-card" data-airdrop="reaction"><h3>⚡ REACTION RUSH</h3><p>Wait for green, then react. Faster taps earn more. An early tap restarts the wait.</p><div class="game-stage"><button type="button" class="xern-reaction-pad">START</button><div class="game-subtext">Tap START to begin</div></div><button class="airdrop-play" data-game="reaction" hidden>Reaction</button><button class="airdrop-resume" data-resume="reaction">Resume / check result</button><div class="airdrop-result" data-result="reaction">Play to earn Xergs</div></article>
     </div>
   </section>
   <section class="page" id="page-stocks" hidden>
@@ -1497,12 +1510,22 @@ input::placeholder{color:var(--muted);opacity:.8}
     button.disabled=true;
     await casinoAction("plinko","start",Number($("plinko-bet").value),null,function(result){
       var target=20+(result.slot+.5)*480/pMultipliers.length;
-      var start=performance.now(), duration=850;
+      var start=performance.now(), duration=1900;
+      var path=[{x:260,y:12}];
+      for(var row=0;row<pRows;row++){
+        var y=35+row*32,desired=260+(target-260)*(row+1)/(pRows+1);
+        var pegs=pPegs.filter(function(peg){return peg.y===y;});
+        var peg=pegs.reduce(function(best,p){return Math.abs(p.x-desired)<Math.abs(best.x-desired)?p:best;});
+        path.push({x:peg.x+(desired>=peg.x?10:-10),y:y-10});
+      }
+      path.push({x:target,y:382});
       casinoMessage("plinko","Dropping…",true);
       function frame(now){
         if(generation!==sessionGeneration)return;
         var progress=Math.min(1,(now-start)/duration);
-        drawPlinko({x:260+(target-260)*progress+Math.sin(progress*30)*16*(1-progress),y:12+378*progress});
+        var segment=Math.min(path.length-2,Math.floor(progress*(path.length-1)));
+        var t=progress===1?1:progress*(path.length-1)-segment,a=path[segment],b=path[segment+1];
+        drawPlinko({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t*t-5*Math.sin(Math.PI*t)});
         if(progress<1)plinkoAnimation=requestAnimationFrame(frame);
         else{
           button.disabled=false; plinkoAnimation=0;
@@ -1551,6 +1574,9 @@ input::placeholder{color:var(--muted);opacity:.8}
     button.disabled=true;
     await casinoAction("dice","start",Number($("dice-bet").value),Number(dSlider.value),function(result){
       $("dice-res").textContent=result.roll;
+      if($("dice-res").animate&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+        $("dice-res").animate([{transform:"translateY(-12px) rotate(-12deg)",opacity:.3},{transform:"translateY(4px) rotate(6deg)",opacity:1},{transform:"translateY(0) rotate(0)"}],{duration:500,easing:"ease-out"});
+      }
       casinoMessage("dice","You rolled "+result.roll+(result.payout?". Won "+result.payout:". Lost "+result.bet)+" Xergs.",!!result.payout);
     });
     button.disabled=false;
@@ -1892,72 +1918,237 @@ input::placeholder{color:var(--muted);opacity:.8}
       document.querySelectorAll('.warfare-buy-asset').forEach(function(b){b.disabled=full;b.title=full?'No equipment slots available. Expand your territory or wait for a rental to expire.':'';});
     }catch(e){console.warn('Market slots',e);}
   }
-  var airdropCooldowns={},airdropPlays={};
+  var airdropCooldowns={},airdropPlays={},airdropBusy={},airdropRounds={};
+  var airdropGeneration=0,airdropAnimations=[];
+  var airdropIcons=['💎','🪙','⚡','🍀','⭐','🎁'];
+  var airdropDescriptions={
+    case:'5 strikes · 350 under 8s, 200 under 15s, otherwise 80 Xergs · 1 hour cooldown',
+    deck:'6 turns · 25 + 40 per pair · 100 bonus for a perfect game · 45 min cooldown',
+    spin:'3 matching symbols: 350 · a pair: 100 · otherwise 35 Xergs · 30 min cooldown',
+    bounce:'Landing bins pay 10 / 20 / 50 / 20 / 10 Xergs · 3 plays/day · 1 min cooldown',
+    target:'5 hits · 50 under 10s, 30 under 20s, otherwise 10 Xergs · 3 plays/day',
+    reaction:'≤250ms: 60 · ≤400ms: 40 · ≤700ms: 25 · otherwise 10 Xergs · 3 plays/day'
+  };
   function easternDay(){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
-  function airdropLimit(game){return ['bounce','target','reaction'].includes(game)?3:game==='tap'?25:100;}
+  function airdropLimit(game){return ['bounce','target','reaction'].includes(game)?3:100;}
   function airdropUsed(game){var d=airdropPlays[game];return d&&d.day===easternDay()?d.count:0;}
-  async function refreshAirdrops(){
-    var ss=loadSession();if(!ss||!ss.access_token)return;
-    try{var r=await api('/rest/v1/airdrop_claims?select=game,last_claim_at,plays_today,day_utc','GET',null,ss.access_token);
-      if(!r.ok||!Array.isArray(r.data))return;
-      var wait={case:3600,tap:5,deck:2700,spin:1800,stack:480,bounce:60,target:45,reaction:45};
-      r.data.forEach(function(c){airdropCooldowns[c.game]=Date.parse(c.last_claim_at)+(wait[c.game]||0)*1000;airdropPlays[c.game]={day:c.day_utc,count:Number(c.plays_today)||0};});
-      paintAirdropCooldowns();
-    }catch(e){console.warn('Airdrops',e);}
+  function airdropCard(game){return document.querySelector('[data-airdrop="'+game+'"]');}
+  function airdropMessage(game,text){airdropCard(game).querySelector('.airdrop-result').textContent=text;}
+  function airdropDelay(ms){
+    var generation=airdropGeneration;
+    return new Promise(function(resolve){setTimeout(function(){resolve(generation===airdropGeneration);},ms);});
+  }
+  function resetAirdropGames(){
+    airdropGeneration++;
+    airdropAnimations.forEach(function(animation){animation.cancel();});airdropAnimations=[];
+    airdropRounds={};airdropBusy={};airdropCooldowns={};airdropPlays={};
+    reactionReady=false;reactionWaiting=false;reactionPad.textContent='START';
+    document.querySelectorAll('.slot-reel').forEach(function(el){el.style.transform='';});
+    document.querySelector('.falling-ball').style.opacity='0';
+    paintAirdropCooldowns();
   }
   function paintAirdropCooldowns(){
-    document.querySelectorAll('.airdrop-play').forEach(function(b){var game=b.dataset.game,end=airdropCooldowns[game]||0,sec=Math.max(0,Math.ceil((end-Date.now())/1000));
-      var used=airdropUsed(game),max=airdropLimit(game),maxed=used>=max;b.disabled=sec>0||maxed||!!airdropBusy[game];
-      if(maxed){var msg=document.querySelector('[data-result="'+game+'"]');if(msg&&!msg.classList.contains('reward-won'))msg.textContent='All '+max+' plays used today · resets midnight Eastern';}
-      if(sec>0&&!maxed){var el=document.querySelector('[data-result="'+game+'"]');if(el&&!el.classList.contains('reward-won'))el.textContent='Next play in '+Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0')+' · '+used+'/'+max+' plays';}else if(!maxed){var el=document.querySelector('[data-result="'+game+'"]');if(el&&!el.classList.contains('reward-won')){var base=airdropDescriptions[game];if(base)el.textContent=base+' · '+used+'/'+max+' played today';}}
+    document.querySelectorAll('[data-airdrop]').forEach(function(card){
+      var game=card.dataset.airdrop,round=airdropRounds[game],active=!!round&&round.active;
+      var seconds=Math.max(0,Math.ceil(((airdropCooldowns[game]||0)-Date.now())/1000));
+      var disabled=!!airdropBusy[game]||(!active&&(seconds>0||airdropUsed(game)>=airdropLimit(game)));
+      card.querySelectorAll('button').forEach(function(button){button.disabled=disabled;});
+      if(game==='deck'&&active){
+        var matched=round.state.matched||[];
+        card.querySelectorAll('.pick-card').forEach(function(button){button.disabled=disabled||matched.includes(Number(button.dataset.card));});
+      }
+      var result=card.querySelector('.airdrop-result');
+      if(!active&&!airdropBusy[game]&&!result.classList.contains('reward-won')){
+        result.textContent=airdropDescriptions[game]+(airdropUsed(game)>=airdropLimit(game)?' · Back at midnight Eastern':seconds>0?' · Next play '+Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0'):'');
+      }
     });
   }
-  var airdropDescriptions={case:'80–350 Xergs · 1 hour cooldown',deck:'25–150 Xergs · 45 min cooldown',spin:'35–185 Xergs · 30 min cooldown',bounce:'10–30 Xergs · 1 min cooldown',target:'8–25 Xergs · 45 sec cooldown',reaction:'10–30 Xergs · 45 sec cooldown'};
-  var airdropBusy={};
-  async function finishAirdrop(game){
-    if(airdropBusy[game]||(airdropCooldowns[game]||0)>Date.now()||airdropUsed(game)>=airdropLimit(game))return;
-    var ss=loadSession(),card=document.querySelector('[data-airdrop="'+game+'"]');if(!ss||!ss.access_token){if(card)card.querySelector('.airdrop-result').textContent='Sign in to earn Xergs';return;}
-    airdropBusy[game]=true;var el=card.querySelector('.airdrop-result');el.classList.remove('reward-won');el.textContent='Opening reward…';
-    try{var r=await api('/rest/v1/rpc/airdrop_play','POST',{p_game:game},ss.access_token),d=r.data||{};
-      if(d.ok){el.classList.add('reward-won');el.textContent='🎉 +'+Number(d.reward).toLocaleString()+' XERGS · '+Number(d.plays_today||0)+'/'+airdropLimit(game)+' plays today';setTimeout(function(){el.classList.remove('reward-won');paintAirdropCooldowns();},4500);airdropCooldowns[game]=Date.parse(d.next_at);if(d.plays_today!=null)airdropPlays[game]={day:easternDay(),count:Number(d.plays_today)};await resync();}
-      else{el.textContent=d.error||'Please try later';if(d.next_at)airdropCooldowns[game]=Date.parse(d.next_at);if(d.plays_today!=null)airdropPlays[game]={day:easternDay(),count:Number(d.plays_today)};}
-    }catch(e){el.textContent=e.message;}finally{airdropBusy[game]=false;paintAirdropCooldowns();}
+  async function airdropRequest(game,action,input){
+    var session=loadSession(),generation=airdropGeneration;
+    if(!session){airdropMessage(game,'Sign in to play');return null;}
+    var round=airdropRounds[game];
+    var payload=Object.assign({},input||{});
+    if(action!=='start'&&action!=='status'&&round)payload.round_id=round.round_id;
+    var response=await api('/rest/v1/rpc/airdrop_round','POST',{p_game:game,p_action:action,p_input:payload},session.access_token);
+    if(generation!==airdropGeneration)return null;
+    var data=response.data||{};
+    if(!response.ok||!data.ok){
+      if(data.next_at)airdropCooldowns[game]=Date.parse(data.next_at);
+      if(data.plays_today!=null)airdropPlays[game]={day:easternDay(),count:data.plays_today};
+      throw new Error(data.error||data.message||'Could not finish the round. Try again.');
+    }
+    if(data.round_id)airdropRounds[game]=data;
+    if(data.next_at)airdropCooldowns[game]=Date.parse(data.next_at);
+    if(data.plays_today!=null)airdropPlays[game]={day:easternDay(),count:data.plays_today};
+    return data;
   }
-  var crateHits=0;document.querySelector('[data-game="case"]').addEventListener('click',function(){
-    if(airdropBusy.case||(airdropCooldowns.case||0)>Date.now()||airdropUsed('case')>=airdropLimit('case'))return;
-    crateHits++;var card=document.querySelector('[data-airdrop="case"]'),art=card.querySelector('.crate-art');art.classList.add('hit');setTimeout(function(){art.classList.remove('hit');},130);
-    card.querySelector('.crate-progress span').style.width=(Math.min(crateHits,5)*20)+'%';card.querySelector('.game-subtext').textContent=Math.max(0,5-crateHits)+' hits remaining';
-    if(crateHits>=5){crateHits=0;art.textContent='🎉';finishAirdrop('case').then(function(){setTimeout(function(){art.textContent='📦';card.querySelector('.crate-progress span').style.width='0%';card.querySelector('.game-subtext').textContent='5 hits remaining';},1800);});}
+  function showAirdropReward(game,data){
+    var card=airdropCard(game),result=card.querySelector('.airdrop-result');
+    result.classList.add('reward-won');
+    result.textContent='+'+data.reward+' XERGS'+(data.pairs!=null?' · '+data.pairs+' pairs in '+data.tries+' turns':data.milliseconds!=null?' · '+data.milliseconds+' ms':data.seconds!=null?' · '+data.seconds+' seconds':'');
+    resync().catch(function(){});
+  }
+  async function playAirdrop(game,action,input,render){
+    if(airdropBusy[game])return;
+    airdropBusy[game]=true;
+    airdropCard(game).querySelector('.airdrop-result').classList.remove('reward-won');
+    paintAirdropCooldowns();
+    var generation=airdropGeneration;
+    try{
+      var data=await airdropRequest(game,action,input);
+      if(!data)return;
+      if(render)await render(data);
+      if(generation!==airdropGeneration)return;
+      if(data.reward!=null)showAirdropReward(game,data);
+    }catch(error){if(generation===airdropGeneration)airdropMessage(game,error.message+' Use Resume to recover a completed request.');}
+    finally{if(generation===airdropGeneration){airdropBusy[game]=false;paintAirdropCooldowns();}}
+  }
+  function renderDeck(data){
+    var state=data.state||{},opened=state.opened||[],matched=state.matched||[];
+    airdropCard('deck').querySelectorAll('.pick-card').forEach(function(button){
+      var index=Number(button.dataset.card),visible=data.board||matched.includes(index)||opened.includes(index);
+      var value=data.board?data.board[index]:(state.revealed||{})[index];
+      button.textContent=visible&&value!=null?['💎','🍀','⭐'][value]:'✦';
+      button.classList.toggle('card-open',!!visible);button.classList.toggle('card-matched',matched.includes(index));
+      button.setAttribute('aria-label',visible?'Card '+(index+1)+': '+['diamond','clover','star'][value]:'Hidden card '+(index+1));
+    });
+    airdropCard('deck').querySelector('.game-subtext').textContent=(matched.length/2)+' / 3 pairs · '+(state.tries||0)+' / 6 turns';
+  }
+  async function refreshAirdrops(){
+    var session=loadSession(),generation=airdropGeneration;if(!session)return;
+    try{
+      var response=await api('/rest/v1/airdrop_claims?select=game,last_claim_at,plays_today,day_utc','GET',null,session.access_token);
+      if(generation!==airdropGeneration||!response.ok||!Array.isArray(response.data))return;
+      var waits={case:3600,deck:2700,spin:1800,bounce:60,target:45,reaction:45};
+      response.data.forEach(function(claim){
+        airdropCooldowns[claim.game]=Date.parse(claim.last_claim_at)+(waits[claim.game]||0)*1000;
+        airdropPlays[claim.game]={day:claim.day_utc,count:claim.plays_today};
+      });
+      paintAirdropCooldowns();
+    }catch(error){airdropMessage('case','Could not load cooldowns. Reopen Airdrops to retry.');}
+  }
+  document.querySelector('[data-game="case"]').addEventListener('click',function(){
+    var active=airdropRounds.case&&airdropRounds.case.active;
+    playAirdrop('case',active?'hit':'start',{},function(data){
+      var hits=data.state?data.state.hits:data.hits||0,card=airdropCard('case'),art=card.querySelector('.crate-art');
+      card.querySelector('.crate-progress span').style.width=(hits*20)+'%';
+      card.querySelector('.game-subtext').textContent=active?(5-hits)+' strikes remaining':'Crate unlocked. Land 5 strikes quickly!';
+      art.textContent=hits===5?'🎉':'📦';
+      if(art.animate)airdropAnimations.push(art.animate([{transform:'rotate(0) scale(1)'},{transform:'rotate(-12deg) scale(.88)'},{transform:'rotate(8deg) scale(1.05)'},{transform:'rotate(0) scale(1)'}],{duration:300}));
+    });
   });
-  document.querySelectorAll('.pick-card').forEach(function(btn){btn.addEventListener('click',function(){
-    if(airdropBusy.deck||(airdropCooldowns.deck||0)>Date.now()||airdropUsed('deck')>=airdropLimit('deck'))return;
-    var card=document.querySelector('[data-airdrop="deck"]');card.querySelectorAll('.pick-card').forEach(function(c){c.disabled=true;});btn.innerHTML='✨<small>REVEAL</small>';
-    finishAirdrop('deck').then(function(){setTimeout(function(){card.querySelectorAll('.pick-card').forEach(function(c){c.innerHTML='✦<small>?</small>';c.disabled=false;});},2000);});
-  });});
+  document.querySelectorAll('.pick-card').forEach(function(button){
+    button.addEventListener('click',async function(){
+      if(airdropBusy.deck)return;
+      var round=airdropRounds.deck;
+      if(!round||!round.active){
+        await playAirdrop('deck','start',{},renderDeck);
+        return;
+      }
+      await playAirdrop('deck','pick',{card:Number(button.dataset.card)},async function(data){
+        renderDeck(data);
+        if(data.active&&data.state.opened.length===2){
+          if(!await airdropDelay(900))return;
+          data.state.opened=[];renderDeck(data);
+        }
+      });
+    });
+  });
   document.querySelector('[data-game="spin"]').addEventListener('click',function(){
-    if(airdropBusy.spin||(airdropCooldowns.spin||0)>Date.now()||airdropUsed('spin')>=airdropLimit('spin'))return;
-    var btn=this,card=document.querySelector('[data-airdrop="spin"]'),reels=card.querySelector('.slot-reels'),icons=['💎','🪙','⚡','🍀','⭐','🎁'];btn.disabled=true;reels.classList.add('spinning');
-    var count=0,interval=setInterval(function(){card.querySelectorAll('.slot-reel').forEach(function(el){el.textContent=icons[Math.floor(Math.random()*icons.length)];});if(++count>=14){clearInterval(interval);reels.classList.remove('spinning');card.querySelectorAll('.slot-reel').forEach(function(el){el.textContent='💰';});finishAirdrop('spin').then(function(){paintAirdropCooldowns();});}},90);
+    playAirdrop('spin','start',{},async function(data){
+      if(!data.symbols)return;
+      var reels=airdropCard('spin').querySelectorAll('.slot-reel');
+      airdropMessage('spin','Reels spinning…');
+      var reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+      await Promise.all(Array.from(reels).map(async function(reel,index){
+        var ticks=reduced?1:12+index*5;
+        for(var tick=0;tick<ticks;tick++){
+          reel.textContent=airdropIcons[(tick+index)%airdropIcons.length];
+          if(!await airdropDelay(reduced?0:35+tick*3))return;
+        }
+        reel.textContent=airdropIcons[data.symbols[index]];
+        if(reel.animate)airdropAnimations.push(reel.animate([{transform:'translateY(-12px)'},{transform:'translateY(4px)'},{transform:'translateY(0)'}],{duration:240,easing:'ease-out'}));
+      }));
+      airdropCard('spin').querySelector('.game-subtext').textContent=data.reward===350?'Three of a kind!':data.reward===100?'Matching pair!':'No match. Supply reward collected.';
+    });
   });
-  document.querySelectorAll('.drop-lane').forEach(function(btn){btn.addEventListener('click',function(){
-    if(airdropBusy.bounce||(airdropCooldowns.bounce||0)>Date.now()||airdropUsed('bounce')>=3)return;
-    var card=document.querySelector('[data-airdrop="bounce"]'),ball=card.querySelector('.falling-ball'),lane=Number(btn.dataset.lane);
-    card.querySelectorAll('.drop-lane').forEach(function(b){b.disabled=true;});ball.style.transition='none';ball.style.top='0';ball.style.left=(15+lane*17)+'%';ball.classList.remove('dropping');void ball.offsetWidth;
-    ball.style.transition='top .65s cubic-bezier(.28,.65,.5,1),left .65s ease-in-out';var slot=Math.max(0,Math.min(4,lane+Math.floor(Math.random()*3)-1));ball.style.left=(12+slot*18)+'%';ball.classList.add('dropping');card.querySelector('.game-subtext').textContent='Ball landing in lane '+(slot+1)+' · reward revealed below';
-    setTimeout(function(){finishAirdrop('bounce').then(function(){setTimeout(function(){ball.classList.remove('dropping');card.querySelectorAll('.drop-lane').forEach(function(b){b.disabled=false;});card.querySelector('.game-subtext').textContent='Choose a lane for your next drop';},1000);});},700);
-  });});
-  var targetButton=document.querySelector('.xern-moving-target');
-  function moveAirdropTarget(){targetButton.style.left=(8+Math.random()*72)+'%';targetButton.style.top=(5+Math.random()*55)+'%';}
-  setInterval(function(){if($('page-airdrops')&&!$('page-airdrops').hidden&&!airdropBusy.target&&(airdropCooldowns.target||0)<=Date.now()&&airdropUsed('target')<3)moveAirdropTarget();},850);
-  targetButton.addEventListener('click',function(){if(airdropBusy.target||(airdropCooldowns.target||0)>Date.now()||airdropUsed('target')>=3)return;moveAirdropTarget();finishAirdrop('target');});
-  var reactionPad=document.querySelector('.xern-reaction-pad'),reactionTimer=null,reactionReady=false,reactionStart=0;
-  reactionPad.addEventListener('click',function(){
-    if(airdropBusy.reaction||(airdropCooldowns.reaction||0)>Date.now()||airdropUsed('reaction')>=3)return;
-    if(reactionReady){reactionReady=false;reactionPad.className='xern-reaction-pad';reactionPad.textContent=Math.round(performance.now()-reactionStart)+' ms!';finishAirdrop('reaction');return;}
-    if(reactionTimer){clearTimeout(reactionTimer);reactionTimer=null;reactionPad.className='xern-reaction-pad';reactionPad.textContent='Too early! Try again';return;}
-    reactionPad.className='xern-reaction-pad waiting';reactionPad.textContent='WAIT...';reactionTimer=setTimeout(function(){reactionTimer=null;reactionReady=true;reactionStart=performance.now();reactionPad.className='xern-reaction-pad ready';reactionPad.textContent='TAP NOW!';},900+Math.random()*1600);
+  document.querySelectorAll('.drop-lane').forEach(function(button){
+    button.addEventListener('click',function(){
+      playAirdrop('bounce','start',{lane:Number(button.dataset.lane)},async function(data){
+        if(!data.path)return;
+        var card=airdropCard('bounce'),ball=card.querySelector('.falling-ball'),frames=[];
+        data.path.forEach(function(slot,index){
+          var left=(10+slot*20)+'%',top=(index*19)+'%';
+          frames.push({left:left,top:top,offset:index/5,easing:'cubic-bezier(.45,0,.9,.65)'});
+          if(index<4)frames.push({left:left,top:(index*19-3)+'%',offset:(index+.28)/5,easing:'ease-in'});
+        });
+        frames.push({left:(10+data.slot*20)+'%',top:'82%',offset:1});
+        ball.style.opacity='1';ball.style.transition='none';
+        if(ball.animate){
+          var animation=ball.animate(frames,{duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:1800,fill:'forwards'});
+          airdropAnimations.push(animation);
+          try{await animation.finished;}catch(error){return;}
+        }else{ball.style.left=(10+data.slot*20)+'%';ball.style.top='82%';}
+        card.querySelectorAll('.prize-row span').forEach(function(bin,index){bin.classList.toggle('landing-bin',index===data.slot);});
+        card.querySelector('.game-subtext').textContent='Landed in bin '+(data.slot+1)+' · '+data.reward+' Xergs';
+      });
+    });
   });
-  setInterval(function(){if($('page-airdrops')&&!$('page-airdrops').hidden)paintAirdropCooldowns();},1000);
+  var targetButton=document.querySelector('.xern-moving-target'),targetMotionStart=performance.now();
+  function targetFrame(now){
+    var round=airdropRounds.target;
+    if(!document.hidden&&!$('page-airdrops').hidden&&round&&round.active&&!airdropBusy.target){
+      var t=(now-targetMotionStart)/1000,speed=1+(round.state.hits||0)*.22;
+      targetButton.style.left=(38+30*Math.sin(t*speed*1.8))+'%';
+      targetButton.style.top=(30+25*Math.sin(t*speed*2.3))+'%';
+    }
+    requestAnimationFrame(targetFrame);
+  }
+  requestAnimationFrame(targetFrame);
+  targetButton.addEventListener('click',function(){
+    var active=airdropRounds.target&&airdropRounds.target.active;
+    playAirdrop('target',active?'hit':'start',{},function(data){
+      var hits=data.state?data.state.hits:data.hits;
+      airdropCard('target').querySelector('.game-subtext').textContent=hits+' / 5 hits · target speeds up each hit';
+      targetButton.textContent=data.active?'🎯':'▶';
+      targetButton.setAttribute('aria-label',data.active?'Hit moving target':'Start target practice');
+    });
+  });
+  var reactionPad=document.querySelector('.xern-reaction-pad'),reactionReady=false,reactionWaiting=false,reactionStart=0;
+  reactionPad.addEventListener('click',async function(){
+    if(reactionWaiting){
+      reactionWaiting=false;reactionReady=false;reactionPad.className='xern-reaction-pad';
+      reactionPad.textContent='TOO EARLY · RETRY';return;
+    }
+    if(reactionReady){
+      var milliseconds=Math.round(performance.now()-reactionStart);reactionReady=false;
+      reactionPad.className='xern-reaction-pad';reactionPad.textContent=milliseconds+' ms';
+      await playAirdrop('reaction','finish',{milliseconds:milliseconds});return;
+    }
+    if(airdropBusy.reaction)return;
+    await playAirdrop('reaction','start',{},function(){});
+    var round=airdropRounds.reaction;if(!round||!round.active)return;
+    reactionWaiting=true;reactionPad.className='xern-reaction-pad waiting';reactionPad.textContent='WAIT…';
+    if(!await airdropDelay(round.state.wait_ms)||!reactionWaiting)return;
+    reactionWaiting=false;reactionReady=true;reactionStart=performance.now();
+    reactionPad.className='xern-reaction-pad ready';reactionPad.textContent='TAP NOW!';
+  });
+  document.querySelectorAll('.airdrop-resume').forEach(function(button){
+    button.addEventListener('click',function(){
+      var game=button.dataset.resume;
+      playAirdrop(game,'status',{},function(data){
+        if(game==='deck')renderDeck(data);
+        if(data.symbols)airdropCard(game).querySelectorAll('.slot-reel').forEach(function(reel,index){reel.textContent=airdropIcons[data.symbols[index]];});
+        if(data.slot!=null){
+          var ball=airdropCard(game).querySelector('.falling-ball');
+          ball.style.opacity='1';ball.style.left=(10+data.slot*20)+'%';ball.style.top='82%';
+        }
+        if(game==='case'&&data.state)airdropCard(game).querySelector('.crate-progress span').style.width=(data.state.hits*20)+'%';
+        if(data.active)airdropMessage(game,'Round restored. Continue playing.');
+      });
+    });
+  });
+  setInterval(function(){if(!$('page-airdrops').hidden)paintAirdropCooldowns();},1000);
 
   var landMap=null, landGeoLayer=null, landPlotLayer=null, landGridCanvas=null, landGridCtx=null, landVisibleFeatures=[], landSelected=null, landFirstPlot=null, landSecondPlot=null, landMapReady=false, landMapLoading=false, landGridRendering=false, landGridRenderTimer=null, landLastGridView="";
   var landClaimsRefreshInFlight=null, landClaimsLastApplied=0, landBuyPending=false;
@@ -3181,6 +3372,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     landRallyLatLng=null;
     teamUnits=[];
     nativeMarkers=[]; nativeOtherTroops=[]; nativeEnemyWalkers=[]; warfareMarches=[];
+    resetAirdropGames();
     if(plinkoAnimation)cancelAnimationFrame(plinkoAnimation);
     plinkoAnimation=0; renderMines({},"status"); renderBlackjack({},"status");
     ["plinko-drop","bomb-start","bj-deal"].forEach(function(id){$(id).disabled=false;});

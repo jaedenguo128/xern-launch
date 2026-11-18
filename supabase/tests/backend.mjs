@@ -42,8 +42,63 @@ try{
  assert.equal((await call('gift_status')).next_reward,100);
  assert.equal((await call('claim_daily_gift')).money,350);
  assert.equal((await call('claim_daily_gift')).error,'too_soon');
- assert.equal((await call('airdrop_play',['case'])).ok,true);
  assert.equal((await call('airdrop_play',['case'])).ok,false);
+ const airdropCrate = await call('airdrop_round',['case','start',{}]);
+ assert(airdropCrate.ok && airdropCrate.active);
+ assert.equal((await call('airdrop_round',['case','hit',{round_id:v}])).ok,false);
+ for(let hit=0;hit<5;hit++){
+   await admin();
+   await exec("update xern_private.airdrop_rounds set state=state-'last_hit' where game='case'");
+   await player(u);
+   const result=await call('airdrop_round',['case','hit',{round_id:airdropCrate.round_id}]);
+   assert(result.ok);
+   if(hit===4){
+     assert.equal(result.reward,350);
+     const balance=result.money;
+     assert.equal((await call('airdrop_round',['case','hit',{round_id:airdropCrate.round_id}])).money,balance);
+   }
+ }
+ assert.equal((await call('airdrop_round',['case','start',{}])).ok,false);
+ const spin=await call('airdrop_round',['spin','start',{}]);
+ const symbols=spin.symbols;
+ const expected=new Set(symbols).size===1?350:new Set(symbols).size===2?100:35;
+ assert.equal(spin.reward,expected);
+ assert.equal((await call('airdrop_round',['spin','status',{}])).money,spin.money);
+ const drop=await call('airdrop_round',['bounce','start',{lane:2}]);
+ assert.equal(drop.reward,[10,20,50,20,10][drop.slot]);
+ assert.equal(drop.path[0],2);
+ assert.equal(drop.path.at(-1),drop.slot);
+ assert.equal((await call('airdrop_round',['bounce','start',{lane:99}])).ok,false);
+ const deck=await call('airdrop_round',['deck','start',{}]);
+ assert.equal(deck.state.board,undefined);
+ await admin();
+ const board=(await db.query("select state->'board' board from xern_private.airdrop_rounds where game='deck'")).rows[0].board;
+ await player(u);
+ let memory;
+ for(let symbol=0;symbol<3;symbol++){
+   for(let card=0;card<6;card++)if(board[card]===symbol){
+     memory=await call('airdrop_round',['deck','pick',{round_id:deck.round_id,card}]);
+     assert(memory.ok);
+   }
+ }
+ assert.equal(memory.reward,245);
+ assert.equal(memory.pairs,3);
+ const reaction=await call('airdrop_round',['reaction','start',{}]);
+ assert.equal((await call('airdrop_round',['reaction','finish',{round_id:reaction.round_id,milliseconds:1}])).ok,false);
+ await admin();
+ await exec("update xern_private.airdrop_rounds set started_at=clock_timestamp()-interval '10 seconds' where game='reaction'");
+ await player(u);
+ assert.equal((await call('airdrop_round',['reaction','finish',{round_id:reaction.round_id,milliseconds:200}])).reward,60);
+ const targetRound=await call('airdrop_round',['target','start',{}]);
+ for(let hit=0;hit<5;hit++){
+   await admin();
+   await exec("update xern_private.airdrop_rounds set state=state-'last_hit',started_at=clock_timestamp()-interval '12 seconds' where game='target'");
+   await player(u);
+   const result=await call('airdrop_round',['target','hit',{round_id:targetRound.round_id}]);
+   assert(result.ok);
+   if(hit===4)assert.equal(result.reward,30);
+ }
+ console.log('PASS server airdrop outcomes, matching pairs, bin payouts, skill tiers, cooldowns and replay protection');
  assert.equal((await call('xern_christmas_open',['red'])).opened[0],'red');
  assert.equal((await call('xern_christmas_open',['red'])).ok,false);
  const transfer=[ 'Bravo',10,'99999999-0000-4000-8000-000000000001'];
