@@ -1945,6 +1945,11 @@ input::placeholder{color:var(--muted);opacity:.8}
     reactionReady=false;reactionWaiting=false;reactionPad.textContent='START';
     document.querySelectorAll('.slot-reel').forEach(function(el){el.style.transform='';});
     document.querySelector('.falling-ball').style.opacity='0';
+    document.querySelectorAll('[data-airdrop]').forEach(function(card){
+      card.querySelector('.airdrop-result').classList.remove('reward-won');
+      card.querySelectorAll('.pick-card').forEach(function(button){button.textContent='✦';button.classList.remove('card-open','card-matched');});
+    });
+    targetButton.textContent='▶';
     paintAirdropCooldowns();
   }
   function paintAirdropCooldowns(){
@@ -1952,7 +1957,7 @@ input::placeholder{color:var(--muted);opacity:.8}
       var game=card.dataset.airdrop,round=airdropRounds[game],active=!!round&&round.active;
       var seconds=Math.max(0,Math.ceil(((airdropCooldowns[game]||0)-Date.now())/1000));
       var disabled=!!airdropBusy[game]||(!active&&(seconds>0||airdropUsed(game)>=airdropLimit(game)));
-      card.querySelectorAll('button').forEach(function(button){button.disabled=disabled;});
+      card.querySelectorAll('button').forEach(function(button){button.disabled=button.classList.contains('airdrop-resume')?!!airdropBusy[game]:disabled;});
       if(game==='deck'&&active){
         var matched=round.state.matched||[];
         card.querySelectorAll('.pick-card').forEach(function(button){button.disabled=disabled||matched.includes(Number(button.dataset.card));});
@@ -2057,7 +2062,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   document.querySelector('[data-game="spin"]').addEventListener('click',function(){
     playAirdrop('spin','start',{},async function(data){
       if(!data.symbols)return;
-      var reels=airdropCard('spin').querySelectorAll('.slot-reel');
+      var spinGeneration=airdropGeneration,reels=airdropCard('spin').querySelectorAll('.slot-reel');
       airdropMessage('spin','Reels spinning…');
       var reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
       await Promise.all(Array.from(reels).map(async function(reel,index){
@@ -2069,6 +2074,7 @@ input::placeholder{color:var(--muted);opacity:.8}
         reel.textContent=airdropIcons[data.symbols[index]];
         if(reel.animate)airdropAnimations.push(reel.animate([{transform:'translateY(-12px)'},{transform:'translateY(4px)'},{transform:'translateY(0)'}],{duration:240,easing:'ease-out'}));
       }));
+      if(spinGeneration!==airdropGeneration)return;
       airdropCard('spin').querySelector('.game-subtext').textContent=data.reward===350?'Three of a kind!':data.reward===100?'Matching pair!':'No match. Supply reward collected.';
     });
   });
