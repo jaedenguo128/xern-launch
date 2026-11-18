@@ -108,7 +108,7 @@ begin
   end if;
   update public.profiles set money=wallet where id=uid;
   next_price:=greatest(0.10,least(100000000,round(quote.price+
-    (case p_side when 'buy' then 1 else -1 end)*least(1,quote.price*0.02,p_amount*quote.price/greatest(1000000,quote.depth*400)),2)));
+    (case p_side when 'buy' then 1 else -1 end)*least(1,quote.price*0.02,p_amount*quote.price*quote.price/greatest(1000000,quote.depth*400)),2)));
   if next_price<>quote.price then
     update public.stock_quotes set price=next_price where symbol=p_symbol;
     insert into public.stock_history(symbol,price) values(p_symbol,next_price);
@@ -132,7 +132,7 @@ $$;
 create function xern_private.stock_market_tick() returns void language plpgsql set search_path='' as $$
 begin
   with changes as (
-    update public.stock_quotes q set price=greatest(.10,round((q.price*.998+q.base_price*.002)*(1+(random()-.5)*.05),2)),
+    update public.stock_quotes q set price=greatest(.10,round((q.price*.998+q.base_price*.002)*(1+(random()::numeric-.5)*.05),2)),
       price_24h=coalesce((select h.price from public.stock_history h where h.symbol=q.symbol
         and h.created_at<=now()-interval '1 day' order by h.created_at desc limit 1),q.base_price)
     returning symbol,price
