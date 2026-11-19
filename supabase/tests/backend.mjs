@@ -168,5 +168,38 @@ try{
  assert((await db.query('select * from public.xern_read_owner_messages()')).rows[0].message==='Test report');
  assert((await call('xern_delete_owner_message',[1])).ok);
  assert((await call('xern_clan_weekly_payout')).ok);
+ await admin();
+ await exec("delete from public.warfare_live_battles; delete from public.warfare_marches; delete from public.land_claims;");
+ await exec("create or replace function xern_private.safe_plot(key text) returns boolean language sql immutable as $$select true$$");
+ await db.query("insert into public.land_claims(country_key,country_name,owner_id,owner_name) values('plot:4000:1400','Circle test',$1,'Alpha')",[u]);
+ await db.query("update public.team_units set stationed_plot_key='plot:4000:1400',unit_count=1 where id=$1",[unit]);
+ const explored=[];
+ for(let i=0;i<48;i++){
+   const next=(await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k;
+   assert(next,'circle should have a connected next plot');
+   explored.push(next);
+   await db.query("insert into public.land_claims(country_key,country_name,owner_id,owner_name) values($1,'Circle test',$2,'Alpha')",[next,u]);
+ }
+ const xy=explored.map(k=>k.split(':').slice(1).map(Number));
+ const width=Math.max(...xy.map(p=>p[0]))-Math.min(...xy.map(p=>p[0]));
+ const height=Math.max(...xy.map(p=>p[1]))-Math.min(...xy.map(p=>p[1]));
+ assert(Math.abs(width-height)<=1,'expansion should remain round');
+ assert(xy.some(p=>p[0]<4000)&&xy.some(p=>p[0]>4000)&&xy.some(p=>p[1]<1400)&&xy.some(p=>p[1]>1400));
+ const distances=xy.map(([x,y])=>(x-4000)**2+(y-1400)**2);
+ assert(distances.every((d,i)=>i===0||d>=distances[i-1]),'fill the nearer ring before the next');
+ // A lost inner frontier can be recovered by an existing squad.
+ await db.query("delete from public.land_claims where country_key<>'plot:4000:1400'");
+ await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400')",[unit,u]);
+ assert((await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k);
+ await db.query("update public.warfare_marches set active=false");
+ await exec("update public.profiles set team_buff_expires_at=null; delete from public.xern_war_doctrines;");
+ await db.query("insert into public.warfare_marches(unit_id,owner_id,current_plot_key,mode,active,last_step_at) values($1,$2,'plot:4000:1400','explore',true,now()-make_interval(secs=>(select claim_power*1.1 from public.team_units where id=$1)))",[unit,u]);
+ const before=(await db.query("select count(*)::integer n from public.land_claims")).rows[0].n;
+ await exec("select xern_private.advance_troops()");
+ assert.equal((await db.query("select count(*)::integer n from public.land_claims")).rows[0].n,before,'all troops wait for the slower 1.2x interval');
+ await db.query("update public.warfare_marches set last_step_at=now()-interval '1 hour'");
+ await exec("select xern_private.advance_troops()");
+ assert.equal((await db.query("select count(*)::integer n from public.land_claims")).rows[0].n,before+1);
+ console.log('PASS circular connected exploration, balanced directions, territory-loss recovery and slower timing');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}

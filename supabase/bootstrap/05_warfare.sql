@@ -206,15 +206,20 @@ begin
   if not pg_try_advisory_xact_lock(18002) then return jsonb_build_object('ok',true,'claimed',0,'battles',0); end if;
   perform xern_private.battle_tick();
   for march in
-    select m.*,u.claim_power,u.unit_count,p.team_buff_expires_at,w.doctrine,p.username player_name
+    select m.*,u.claim_power,u.unit_count,u.stationed_plot_key,p.team_buff_expires_at,w.doctrine,p.username player_name,
+      greatest(1,u.claim_power*case w.doctrine when 'defensive' then 1.1 when 'aggressive' then .9 else 1 end/
+        (case when p.team_buff_expires_at>now() then 2 else 1 end))*
+        case when m.mode='explore' then 1.2 else 1 end step_seconds
     from public.warfare_marches m join public.team_units u on u.id=m.unit_id
     join public.profiles p on p.id=m.owner_id left join public.xern_war_doctrines w on w.owner_id=m.owner_id
     where m.active and (uid is null or m.owner_id=uid) and m.last_step_at<=now()-
       make_interval(secs=>greatest(1,u.claim_power*case w.doctrine when 'defensive' then 1.1 when 'aggressive' then .9 else 1 end/
-        (case when p.team_buff_expires_at>now() then 2 else 1 end)))
+        (case when p.team_buff_expires_at>now() then 2 else 1 end))*case when m.mode='explore' then 1.2 else 1 end)
     order by m.last_step_at limit 60
   loop
-    update public.warfare_marches set last_step_at=now() where unit_id=march.unit_id;
+    update public.warfare_marches set last_step_at=case when march.mode='explore'
+      then greatest(last_step_at+make_interval(secs=>march.step_seconds),now()-interval '3 seconds') else now() end
+      where unit_id=march.unit_id;
     if xern_private.sales_active(march.owner_id) or exists(select 1 from public.warfare_live_battles
       where status='active' and march.owner_id in(attacker_id,defender_id)) then continue; end if;
     previous:=march.current_plot_key;
@@ -229,15 +234,8 @@ begin
         exit;
       end if;
       if march.mode='explore' then
-        select k into chosen from xern_private.plot_neighbors(previous) k
-        where not exists(select 1 from public.land_claims l where l.country_key=k and xern_private.allied(march.owner_id,l.owner_id))
-          and xern_private.safe_plot(k) order by k limit 1;
-        if chosen is null then
-          select k into chosen from (select country_key from public.land_claims where owner_id=march.owner_id order by created_at desc limit 160) own
-          cross join lateral xern_private.plot_neighbors(own.country_key) k
-          where not exists(select 1 from public.land_claims l where l.country_key=k and xern_private.allied(march.owner_id,l.owner_id))
-            and xern_private.safe_plot(k) limit 1;
-        end if;
+        chosen:=xern_private.next_exploration_plot(march.unit_id,march.owner_id,
+          coalesce(march.stationed_plot_key,xern_private.home_plot(march.owner_id)));
       else
         if previous=march.target_plot_key then
           update public.warfare_marches set active=false where unit_id=march.unit_id;
