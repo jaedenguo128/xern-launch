@@ -108,7 +108,7 @@ begin
   end if;
   update public.profiles set money=wallet where id=uid;
   next_price:=greatest(0.10,least(100000000,round(quote.price+
-    (case p_side when 'buy' then 1 else -1 end)*least(1,quote.price*0.02,p_amount*quote.price*quote.price/greatest(1000000,quote.depth*400)),2)));
+    (case p_side when 'buy' then 1 else -1 end)*least(2,quote.price*0.04,2*p_amount*quote.price*quote.price/greatest(1000000,quote.depth*400)),2)));
   if next_price<>quote.price then
     update public.stock_quotes set price=next_price where symbol=p_symbol;
     insert into public.stock_history(symbol,price) values(p_symbol,next_price);

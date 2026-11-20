@@ -201,5 +201,21 @@ try{
  await exec("select xern_private.advance_troops()");
  assert.equal((await db.query("select count(*)::integer n from public.land_claims")).rows[0].n,before+1);
  console.log('PASS circular connected exploration, balanced directions, territory-loss recovery and slower timing');
+ await admin();
+ await exec("update public.profiles set money=1000000000; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
+ await player(u);
+ assert((await call('stock_trade',['FERN','buy',100])).ok);
+ await admin();
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),102);
+ await player(u);
+ assert((await call('stock_trade',['FERN','sell',100])).ok);
+ await admin();
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),100);
+ await exec("update public.stock_quotes set price=10,depth=1 where symbol='FERN'");
+ await player(u);
+ assert((await call('stock_trade',['FERN','buy',10000])).ok);
+ await admin();
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),10.4);
+ console.log('PASS stronger buy/sell impact and four-percent cap');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
