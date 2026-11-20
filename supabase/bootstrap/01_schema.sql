@@ -151,7 +151,7 @@ create table public.team_units (
   unit_name text not null references xern_private.unit_catalog,
   rarity text not null, unit_type text not null,
   speed integer not null, health integer not null, claim_power integer not null, attack_value integer not null,
-  unit_count integer not null default 1 check (unit_count between 1 and 500),
+  unit_count integer not null default 0 check (unit_count between 0 and 500),
   stationed_plot_key text,
   gold_per_hour integer not null, level integer not null default 1, duplicate_tokens integer not null default 0,
   created_at timestamptz not null default now(),

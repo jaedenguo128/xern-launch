@@ -62,9 +62,9 @@ begin
   insert into public.land_claims(country_key,country_name,owner_id,owner_name,paid)
     select k,left(coalesce(nullif(n,''),'Homebase'),100),uid,player.username,5 from unnest(p_plot_keys,p_plot_names) p(k,n);
   update public.profiles set money=money-100,income_at=now() where id=uid returning money into player.money;
-  update public.team_units set stationed_plot_key=p_plot_keys[1] where owner_id=uid;
+  update public.team_units set stationed_plot_key=p_plot_keys[1] where owner_id=uid and unit_count>0;
   insert into public.warfare_marches(unit_id,owner_id,current_plot_key,active,mode)
-    select id,uid,p_plot_keys[1],true,'explore' from public.team_units where owner_id=uid
+    select id,uid,p_plot_keys[1],true,'explore' from public.team_units where owner_id=uid and unit_count>0
     on conflict(unit_id) do update set current_plot_key=excluded.current_plot_key,active=true,mode='explore',target_plot_key=null,last_step_at=now();
   return jsonb_build_object('ok',true,'money',player.money);
 end
@@ -180,14 +180,9 @@ begin
   if duplicate then
     update public.team_units set duplicate_tokens=duplicate_tokens+1 where id=unit.id returning * into unit;
   else
-    if (select coalesce(sum(unit_count),0) from public.team_units where owner_id=uid)>=500 then return xern_private.fail('max_characters'); end if;
-    home:=xern_private.home_plot(uid);
-    insert into public.team_units(owner_id,unit_name,rarity,unit_type,speed,health,claim_power,attack_value,stationed_plot_key,gold_per_hour)
-    values(uid,design.unit_name,design.rarity,design.unit_type,design.speed,design.health,design.claim_power,design.attack_value,home,design.gold_per_hour)
+    insert into public.team_units(owner_id,unit_name,rarity,unit_type,speed,health,claim_power,attack_value,unit_count,stationed_plot_key,gold_per_hour)
+    values(uid,design.unit_name,design.rarity,design.unit_type,design.speed,design.health,design.claim_power,design.attack_value,0,null,design.gold_per_hour)
     returning * into unit;
-    if home is not null then
-      insert into public.warfare_marches(unit_id,owner_id,current_plot_key,active,mode) values(unit.id,uid,home,true,'explore');
-    end if;
   end if;
   update public.profiles set money=money-price where id=uid returning money into player.money;
   return jsonb_build_object('ok',true,'money',player.money,'gold',player.gold,'duplicate',duplicate,'unit',to_jsonb(unit));
@@ -216,9 +211,11 @@ begin
     update public.profiles set money=money-case when with_xergs then value else 0 end,
       gold=gold-case when with_xergs then 0 else value end where id=uid returning * into player;
   else
-    if p_quantity>=unit.unit_count then return xern_private.fail('keep_one'); end if;
+    if p_quantity>unit.unit_count then return xern_private.fail('Not enough owned troops'); end if;
     value:=p_quantity*(price/10);
-    update public.team_units set unit_count=unit_count-p_quantity where id=p_unit_id;
+    update public.team_units set unit_count=unit_count-p_quantity,
+      stationed_plot_key=case when unit_count=p_quantity then null else stationed_plot_key end where id=p_unit_id;
+    if p_quantity=unit.unit_count then delete from public.warfare_marches where unit_id=p_unit_id; end if;
     update public.profiles set gold=gold+value where id=uid returning * into player;
   end if;
   return jsonb_build_object('ok',true,'money',player.money,'gold',player.gold,'amount',value);

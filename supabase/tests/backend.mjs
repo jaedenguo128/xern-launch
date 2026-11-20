@@ -131,9 +131,19 @@ try{
  assert((await call('land_trade',['buy',keys,labels])).ok);
  assert.equal((await call('land_trade',['buy',enemy,labels])).error,'homebase_exists');
  const crate=await call('team_open_crate',['bronze']);assert(crate.ok);
+ assert.equal(crate.unit.unit_count,0);
+ assert.equal(crate.unit.stationed_plot_key,null);
  const unit=crate.unit.id;
+ await admin();
+ assert.equal((await db.query("select count(*)::integer n from public.warfare_marches where unit_id=$1",[unit])).rows[0].n,0);
+ await player(u);
  assert((await call('team_buy_units_xergs',[unit,3])).ok);
- assert((await call('team_trade_units',[unit,1,'sell'])).ok);
+ assert((await call('team_trade_units',[unit,3,'sell'])).ok);
+ await admin();
+ assert.equal((await db.query("select unit_count from public.team_units where id=$1",[unit])).rows[0].unit_count,0);
+ assert.equal((await db.query("select count(*)::integer n from public.warfare_marches where unit_id=$1",[unit])).rows[0].n,0);
+ await player(u);
+ assert((await call('team_trade_units',[unit,2,'buy'])).ok);
  assert((await call('warfare_command',[unit,'hold'])).ok);
  assert((await call('warfare_set_explore',[unit])).ok);
  assert((await call('warfare_set_march',[unit,keys[1]])).ok);
@@ -206,7 +216,7 @@ try{
  await player(u);
  assert((await call('stock_trade',['FERN','buy',100])).ok);
  await admin();
- assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),102);
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),104);
  await player(u);
  assert((await call('stock_trade',['FERN','sell',100])).ok);
  await admin();
@@ -215,7 +225,7 @@ try{
  await player(u);
  assert((await call('stock_trade',['FERN','buy',10000])).ok);
  await admin();
- assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),10.4);
- console.log('PASS stronger buy/sell impact and four-percent cap');
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),10.8);
+ console.log('PASS stronger buy/sell impact and eight-percent cap');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
