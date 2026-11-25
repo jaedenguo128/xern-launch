@@ -1814,7 +1814,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     var c = curStock(), s = loadSession(); if(stockTrading||!c||!s||!s.access_token)return;
     var amt = Number(side === "buy" ? $("buyAmt").value : $("sellAmt").value);
     if(!(amt > 0) || !Number.isSafeInteger(amt)) return stkNote("Enter a positive whole number of shares (1, 2, 3...).", true);
-    var generation=sessionGeneration;
+    var generation=sessionGeneration, displayedBuyPrice=Number(c.price);
     stockTrading=true;
     $("buyBtn").disabled = true; $("sellBtn").disabled = true; stkNote("");
     try{
@@ -1825,11 +1825,14 @@ input::placeholder{color:var(--muted);opacity:.8}
       if(!preview.ok||!preview.data||!preview.data.ok){
         stkNote('Could not calculate this trade. Please try again.',true);return;
       }
+      if(side==='buy'&&(Number(preview.data.unit_price)!==displayedBuyPrice||Number(preview.data.value)!==amt*displayedBuyPrice)){
+        stkNote('The price changed. No shares were bought and no Xergs were charged. Review the refreshed price and try again.',true);return;
+      }
       if(!preview.data.can_trade){
         stkNote(side==='buy'?'This order costs '+stockNumber(preview.data.value)+' Xergs. You can afford '+stockNumber(preview.data.affordable_shares)+' shares. Use Buy Max.':
           'You own '+stockNumber(preview.data.affordable_shares)+' whole shares available to sell.',true);return;
       }
-      var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt, p_expected_price: Number(preview.data.unit_price) }, s.access_token);
+      var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt, p_expected_price: side==="buy"?displayedBuyPrice:Number(preview.data.unit_price) }, s.access_token);
       var d = r.data || {};
       if(r.ok && d.ok){
         updateXergsDisplay(d.money);
