@@ -1669,6 +1669,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   var stk = { rows: [], sel: "XERG", hold: {}, cost: {}, timer: null };
   var stockRefreshPending=null, stockTrading=false, stockChartRequest=0;
   function fm(n, d){ return Number(n).toLocaleString(undefined, { maximumFractionDigits: d === undefined ? 2 : d }); }
+  function stockNumber(n){return fm(n,0);}
   function stkNote(t, bad){ var m = $("stkMsg"); m.className = bad ? "giftmsg bad" : "giftmsg"; m.textContent = t; }
   function curStock(){
     for(var i = 0; i < stk.rows.length; i++) if(stk.rows[i].symbol === stk.sel) return stk.rows[i];
@@ -1692,8 +1693,8 @@ input::placeholder{color:var(--muted);opacity:.8}
           if(request!==stockQuoteGeneration||generation!==sessionGeneration)return;
           var quote=result.data||{};
           $(side+'Est').textContent=result.ok&&quote.ok?
-            (side==='buy'?'Estimated cost: ':'Estimated proceeds: ')+fm(quote.value)+' Xergs · includes price impact'+
-              (!quote.can_trade?(side==='buy'?' · Affordable: ':' · Owned: ')+fm(quote.affordable_shares,0)+' shares':''):
+            (side==='buy'?'Estimated cost: ':'Estimated proceeds: ')+stockNumber(quote.value)+' Xergs · includes price impact'+
+              (!quote.can_trade?(side==='buy'?' · Affordable: ':' · Owned: ')+stockNumber(quote.affordable_shares)+' shares':''):
             'Trade quote unavailable. Try again.';
         }catch(error){
           if(request===stockQuoteGeneration&&generation===sessionGeneration)$(side+'Est').textContent='Trade quote unavailable. Try again.';
@@ -1708,8 +1709,8 @@ input::placeholder{color:var(--muted);opacity:.8}
       var own = stk.hold[r.symbol] || 0;
       var ch = r.price_24h ? (Number(r.price) / Number(r.price_24h) - 1) * 100 : 0;
       html += '<button class="stk-item" data-sym="' + teamEsc(r.symbol) + '" aria-pressed="' + (r.symbol === stk.sel) + '">' +
-        '<span><b>' + teamEsc(r.symbol) + '</b><small>' + teamEsc(r.name) + (own > 0 ? ' · you own ' + fm(own, 4) : '') + '</small></span>' +
-        '<span class="r"><b>' + fm(r.price) + '</b><small class="' + (ch >= 0 ? "up" : "down") + '">' + (ch >= 0 ? "+" : "") + ch.toFixed(2) + '%</small></span></button>';
+        '<span><b>' + teamEsc(r.symbol) + '</b><small>' + teamEsc(r.name) + (own > 0 ? ' · you own ' + stockNumber(own) : '') + '</small></span>' +
+        '<span class="r"><b>' + stockNumber(r.price) + '</b><small class="' + (ch >= 0 ? "up" : "down") + '">' + (ch >= 0 ? "+" : "") + ch.toFixed(0) + '%</small></span></button>';
     });
     var list=$("stkList"), scroll=list.scrollLeft;
     list.innerHTML=html;
@@ -1720,19 +1721,19 @@ input::placeholder{color:var(--muted);opacity:.8}
       if(sh > 0){ owned++; tSpent += stk.cost[r.symbol] || 0; tWorth += sh * Number(r.price); }
     });
     var tpl = tWorth - tSpent;
-    if($('stkPortfolioValue'))$('stkPortfolioValue').textContent=fm(tWorth)+' Xergs';
-    if($('stkPortfolioPL')){var pe=$('stkPortfolioPL');pe.textContent=(tpl>=0?'+':'')+fm(tpl)+' Xergs';pe.className=tpl>=0?'up':'down';}
+    if($('stkPortfolioValue'))$('stkPortfolioValue').textContent=stockNumber(tWorth)+' Xergs';
+    if($('stkPortfolioPL')){var pe=$('stkPortfolioPL');pe.textContent=(tpl>=0?'+':'')+stockNumber(tpl)+' Xergs';pe.className=tpl>=0?'up':'down';}
     $("stkSum").innerHTML = owned
-      ? "<b>All your stocks</b><br>Total spent: <b>" + fm(tSpent) + "</b> Xergs<br>Worth now: <b>" + fm(tWorth) + "</b> Xergs<br><span class=\"" + (tpl >= 0 ? "up" : "down") + "\">" + (tpl >= 0 ? "+" : "") + fm(tpl) + " Xergs</span>"
+      ? "<b>All your stocks</b><br>Total spent: <b>" + stockNumber(tSpent) + "</b> Xergs<br>Worth now: <b>" + stockNumber(tWorth) + "</b> Xergs<br><span class=\"" + (tpl >= 0 ? "up" : "down") + "\">" + (tpl >= 0 ? "+" : "") + stockNumber(tpl) + " Xergs</span>"
       : "<b>All your stocks</b><br>You don’t own any stocks yet.";
     var c = curStock();
     if(c){
       var held = stk.hold[c.symbol] || 0;
       $("stkName").textContent = c.name + " (" + c.symbol + ")";
-      $("stkPrice").textContent = fm(c.price) + " Xergs";
+      $("stkPrice").textContent = stockNumber(c.price) + " Xergs";
       var spent = stk.cost[c.symbol] || 0, worth = held * Number(c.price), pl = worth - spent;
-      $("stkHold").innerHTML = "You own <b>" + fm(held, 4) + "</b> shares<br>Spent: <b>" + fm(spent) + "</b> Xergs<br>Worth now: <b>" + fm(worth) + "</b> Xergs" +
-        (spent > 0 ? "<br><span class=\"" + (pl >= 0 ? "up" : "down") + "\">" + (pl >= 0 ? "+" : "") + fm(pl) + " Xergs (" + (pl >= 0 ? "+" : "") + (pl / spent * 100).toFixed(1) + "%)</span>" : "");
+      $("stkHold").innerHTML = "You own <b>" + stockNumber(held) + "</b> shares<br>Spent: <b>" + stockNumber(spent) + "</b> Xergs<br>Worth now: <b>" + stockNumber(worth) + "</b> Xergs" +
+        (spent > 0 ? "<br><span class=\"" + (pl >= 0 ? "up" : "down") + "\">" + (pl >= 0 ? "+" : "") + stockNumber(pl) + " Xergs (" + (pl >= 0 ? "+" : "") + (pl / spent * 100).toFixed(0) + "%)</span>" : "");
     }
     stkEst();
   }
@@ -1745,7 +1746,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     var col = p[p.length - 1] >= p[0] ? "var(--ok)" : "var(--err)";
     svg.innerHTML = '<polygon points="0,' + H + ' ' + pts.join(" ") + ' ' + W + ',' + H + '" style="fill:' + col + ';opacity:.15"/>' +
       '<polyline points="' + pts.join(" ") + '" style="fill:none;stroke:' + col + ';stroke-width:2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
-    $("stkRange").textContent = "Low " + fm(lo) + "  |  High " + fm(hi) + "  |  last " + p.length + " price points";
+    $("stkRange").textContent = "Low " + stockNumber(lo) + "  |  High " + stockNumber(hi) + "  |  last " + p.length + " price points";
   }
   async function stkLoadChart(){
     var s = loadSession(); if(!s || !s.access_token) return;
@@ -1783,7 +1784,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     }
     if(dividends&&dividends.ok&&dividends.data.ok){
       var paid=Number(dividends.data.paid||0);
-      $("stockDividendStatus").textContent=paid>0?"Daily dividends collected: +"+fm(paid)+" Xergs!":"Daily dividends: up to date · 0.5% of stock value per day";
+      $("stockDividendStatus").textContent=paid>0?"Daily dividends collected: +"+stockNumber(paid)+" Xergs!":"Daily dividends: up to date · 0.5% of stock value per day";
       if(paid>0)updateXergsDisplay(dividends.data.money);
     }else $("stockDividendStatus").textContent="Daily dividends temporarily unavailable.";
     stkRenderList();
@@ -1797,7 +1798,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     try{var r=await api(url,'GET',null,token);
       if(r.ok&&Array.isArray(r.data)){
         var paid=r.data.reduce(function(t,x){return t+Number(x.amount||0);},0);
-        $('stkYesterdayDividends').textContent='+'+fm(paid)+' Xergs';
+        $('stkYesterdayDividends').textContent='+'+stockNumber(paid)+' Xergs';
         $('stkDividendNote').textContent='Collected on the previous UTC day · recorded payouts only; earlier payments are not included.';
       }else{$('stkYesterdayDividends').textContent='Unavailable';}
     }catch(e){$('stkYesterdayDividends').textContent='Unavailable';}
@@ -1824,14 +1825,14 @@ input::placeholder{color:var(--muted);opacity:.8}
         stkNote('Could not calculate this trade. Please try again.',true);return;
       }
       if(!preview.data.can_trade){
-        stkNote(side==='buy'?'This order costs '+fm(preview.data.value)+' Xergs. You can afford '+fm(preview.data.affordable_shares,0)+' shares. Use Buy Max.':
-          'You own '+fm(preview.data.affordable_shares,0)+' whole shares available to sell.',true);return;
+        stkNote(side==='buy'?'This order costs '+stockNumber(preview.data.value)+' Xergs. You can afford '+stockNumber(preview.data.affordable_shares)+' shares. Use Buy Max.':
+          'You own '+stockNumber(preview.data.affordable_shares)+' whole shares available to sell.',true);return;
       }
       var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt }, s.access_token);
       var d = r.data || {};
       if(r.ok && d.ok){
         updateXergsDisplay(d.money);
-        stkNote(side === "buy" ? "Invested " + fm(d.value) + " Xergs and received " + fm(d.shares,6) + " shares." : "Sold " + fm(d.shares,6) + " shares for " + fm(d.value) + " Xergs.");
+        stkNote(side === "buy" ? "Invested " + stockNumber(d.value) + " Xergs and received " + stockNumber(d.shares) + " shares." : "Sold " + stockNumber(d.shares) + " shares for " + stockNumber(d.value) + " Xergs.");
         $("buyAmt").value = ""; $("sellAmt").value = "";
       } else if(d.error === "whole_shares_required"){
         stkNote("Please enter a whole number of shares.", true);

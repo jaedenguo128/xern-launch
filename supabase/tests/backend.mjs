@@ -193,10 +193,11 @@ try{
  const xy=explored.map(k=>k.split(':').slice(1).map(Number));
  const width=Math.max(...xy.map(p=>p[0]))-Math.min(...xy.map(p=>p[0]));
  const height=Math.max(...xy.map(p=>p[1]))-Math.min(...xy.map(p=>p[1]));
- assert(Math.abs(width-height)<=1,'expansion should remain round');
+ assert(Math.max(width,height)<=2*Math.min(width,height),'outward fronts should stay spread across both axes');
  assert(xy.some(p=>p[0]<4000)&&xy.some(p=>p[0]>4000)&&xy.some(p=>p[1]<1400)&&xy.some(p=>p[1]>1400));
  const distances=xy.map(([x,y])=>(x-4000)**2+(y-1400)**2);
- assert(distances.every((d,i)=>i===0||d>=distances[i-1]),'fill the nearer ring before the next');
+ assert(Math.max(...distances)<64,'fronts should expand around the station rather than form long lines');
+ assert(distances.some((d,i)=>i>0&&d<distances[i-1]),'a natural front need not finish perfect rings');
  // A lost inner frontier can be recovered by an existing squad.
  await db.query("delete from public.land_claims where country_key<>'plot:4000:1400'");
  await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400')",[unit,u]);
@@ -216,7 +217,7 @@ try{
  await player(u);
  assert((await call('stock_trade',['FERN','buy',100])).ok);
  await admin();
- assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),101);
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),104);
  await player(u);
  assert((await call('stock_trade',['FERN','sell',100])).ok);
  await admin();
@@ -225,11 +226,11 @@ try{
  await player(u);
  assert((await call('stock_trade',['FERN','buy',10000])).ok);
  await admin();
- assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),11);
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),14);
  console.log('PASS supply-based buy/sell price impact');
 
  // Changing the quoted price simulates a scheduled external move between test scenarios.
- for(const [initialPrice,quantities] of [[100,[100]],[100,[10,10,10,10,10,10,10,10,10,10]],[0.1,[1,1,1,1]],[10,[10000]],[99999999,[1]]]){
+ for(const [initialPrice,quantities] of [[100,[100]],[100,[10,10,10,10,10,10,10,10,10,10]],[1,[1,1,1,1]],[10,[10000]],[99999999,[1]]]){
    await admin();
    await db.query("delete from xern_private.stock_liquidity where symbol='FERN'");
    await db.query("update public.stock_quotes set price=$1,depth=1 where symbol='FERN'",[initialPrice]);
@@ -252,8 +253,8 @@ try{
  await exec("delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
  await player(u);
  const buyRound=await call('stock_trade',['FERN','buy',100]);
- assert.equal(buyRound.value,10050,'buyers pay for the full price rise');
- assert.equal((await call('stock_trade',['FERN','sell',100] )).value,10050);
+ assert.equal(buyRound.value,10200,'buyers pay for the full price rise');
+ assert.equal((await call('stock_trade',['FERN','sell',100] )).value,10200);
  console.log('PASS round-trip exploit, split orders, reverse cycles, price bounds and execution totals');
 
  await admin();
@@ -274,5 +275,16 @@ try{
  assert.equal(sell.value,sellPreview.value);
  assert(sell.money<=3000000);
  console.log('PASS affordable Buy Max, exact buy/sell quotes and round-trip protection');
+
+ await admin();
+ await exec('select xern_private.stock_market_tick()');
+ const decimalPrices=(await db.query("select count(*)::integer n from public.stock_quotes where price<>round(price) or price<1")).rows[0].n;
+ assert.equal(decimalPrices,0);
+ await player(u);
+ const wholeBuy=await call('stock_trade',['FERN','buy',100]);
+ assert(wholeBuy.ok && Number.isInteger(wholeBuy.price));
+ const wholeSell=await call('stock_trade',['FERN','sell',100]);
+ assert(wholeSell.ok && Number.isInteger(wholeSell.price));
+ console.log('PASS whole-number stock quotes, stronger impact and irregular outward exploration');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
