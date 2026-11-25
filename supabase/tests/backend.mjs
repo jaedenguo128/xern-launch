@@ -286,5 +286,25 @@ try{
  const wholeSell=await call('stock_trade',['FERN','sell',100]);
  assert(wholeSell.ok && Number.isInteger(wholeSell.price));
  console.log('PASS whole-number stock quotes, stronger impact and irregular outward exploration');
+
+ await admin();
+ for(const [originX,originY,targetX,targetY] of [[4000,1400,4040,1400],[4000,1400,4000,1440],[4000,1400,4030,1430],[4000,2800,4000,2820]]){
+   await exec("delete from public.land_claims; delete from xern_private.rally_fronts;");
+   const origin='plot:'+originX+':'+originY,target='plot:'+targetX+':'+targetY;
+   await db.query("insert into public.land_claims(country_key,country_name,owner_id,owner_name) values($1,'Rally test',$2,'Alpha')",[origin,u]);
+   let current=origin;
+   for(let n=0;n<90;n++){
+     const next=(await db.query("select xern_private.rally_front_plot($1,$2,$3,$4,$5) k",[unit,u,current,target,origin])).rows[0].k;
+     assert(next);
+     assert((await db.query("select exists(select 1 from xern_private.plot_neighbors($1) k join public.land_claims l on l.country_key=k and owner_id=$2) connected",[next,u])).rows[0].connected);
+     await db.query("insert into public.land_claims(country_key,country_name,owner_id,owner_name) values($1,'Rally test',$2,'Alpha') on conflict do nothing",[next,u]);
+     current=next;
+   }
+   const bounds=(await db.query("select max(split_part(country_key,':',2)::int)-min(split_part(country_key,':',2)::int) w,max(split_part(country_key,':',3)::int)-min(split_part(country_key,':',3)::int) h from public.land_claims")).rows[0];
+   assert(bounds.w>=3&&bounds.h>=2,'rally should claim flanks instead of one straight line');
+   const head=(await db.query("select head from xern_private.rally_fronts where unit_id=$1",[unit])).rows[0].head.split(':').slice(1).map(Number);
+   assert(Math.abs(head[0]-targetX)+Math.abs(head[1]-targetY)<Math.abs(originX-targetX)+Math.abs(originY-targetY),'rally head should move toward target');
+ }
+ console.log('PASS horizontal, vertical, diagonal and polar rally fronts with connected flanks');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}

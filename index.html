@@ -2347,8 +2347,8 @@ input::placeholder{color:var(--muted);opacity:.8}
   function nativeMerc(lat){return Math.max(-90,Math.min(90,lat))/90;}
   function nativeInvMerc(v){return Math.max(-90,Math.min(90,v*90));}
   function nativeSize(){return {w:nativeCanvas.clientWidth||900,h:nativeCanvas.clientHeight||600};}
-  function nativeScale(){return nativeSize().w/360*nativeZoom*1.48;}
-  function nativeYScale(){return nativeSize().w/360*nativeZoom*.70;}
+  function nativeScale(){return nativeSize().w/360*nativeZoom*1.70;}
+  function nativeYScale(){return nativeSize().w/360*nativeZoom*.80;}
   function nativeProject(lat,lng){var z=nativeScale(),sz=nativeSize();return {x:sz.w/2+(lng-nativeCenter.lng)*z,y:sz.h/2-(nativeMerc(lat)-nativeMerc(nativeCenter.lat))*180*nativeYScale()};}
   function nativeUnproject(x,y){var z=nativeScale(),sz=nativeSize();return {lng:Math.max(-180,Math.min(179.999,nativeCenter.lng+(x-sz.w/2)/z)),lat:nativeInvMerc(nativeMerc(nativeCenter.lat)-(y-sz.h/2)/(180*nativeYScale()))};}
   // Land validity comes from the same embedded raster that is displayed, not
@@ -2401,7 +2401,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   function nativePlotPosition(key){var c=landPlotCoords(key);return c?nativeProject(landLat(c.y+.5),landLon(c.x+.5)):null;}
   function nativeOwnCenter(){var keys=landOwnedKeys();if(!keys.length)return null;var sx=0,sy=0;keys.forEach(function(k){var c=landPlotCoords(k);if(c){sx+=c.x;sy+=c.y;}});return {lng:landLon(sx/keys.length+.5),lat:landLat(sy/keys.length+.5)};}
-  function nativeFocusOwn(){var c=nativeOwnCenter();if(!c){$('landMsg').textContent='Claim land before using My land.';return;}nativeCenter=c;nativeZoom=8;landRenderGrid();}
+  function nativeFocusOwn(){var c=nativeOwnCenter();if(!c){$('landMsg').textContent='Claim land before using My land.';return;}nativeCenter=c;nativeZoom=10;landRenderGrid();}
   // Preserve walkers across roster refreshes. Each walker chooses its own
   // frontier destination and never teleports back to its initial spawn.
   function nativeFrontierKeys(ownerId){
