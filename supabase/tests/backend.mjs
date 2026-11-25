@@ -225,7 +225,35 @@ try{
  await player(u);
  assert((await call('stock_trade',['FERN','buy',10000])).ok);
  await admin();
- assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),10.8);
- console.log('PASS stronger buy/sell impact and eight-percent cap');
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),14);
+ console.log('PASS supply-based buy/sell price impact');
+
+ // Changing the quoted price simulates a scheduled external move between test scenarios.
+ for(const [initialPrice,quantities] of [[100,[100]],[100,[10,10,10,10,10,10,10,10,10,10]],[0.1,[1,1,1,1]],[10,[10000]],[99999999,[1]]]){
+   await admin();
+   await db.query("delete from xern_private.stock_liquidity where symbol='FERN'");
+   await db.query("update public.stock_quotes set price=$1,depth=1 where symbol='FERN'",[initialPrice]);
+   await db.query("update public.profiles set money=1000000000000 where id=$1",[u]);
+   await player(u);
+   const start=1000000000000;
+   let bought=0;
+   for(const amount of quantities){assert((await call('stock_trade',['FERN','buy',amount])).ok);bought+=amount;}
+   const sold=await call('stock_trade',['FERN','sell',bought]);
+   assert(sold.ok);assert(sold.money<=start,'split buys / bulk sell must not create money');
+   // Reverse the pattern while selling existing shares.
+   const before=sold.money;
+   assert((await call('stock_trade',['FERN','sell',4])).ok);
+   for(let n=0;n<4;n++)assert((await call('stock_trade',['FERN','buy',1])).ok);
+   await admin();
+   const after=Number((await db.query("select money from public.profiles where id=$1",[u])).rows[0].money);
+   assert(after<=before,'bulk sell / split buy must not create money');
+ }
+ await admin();
+ await exec("delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
+ await player(u);
+ const buyRound=await call('stock_trade',['FERN','buy',100]);
+ assert.equal(buyRound.value,10200,'buyers pay for the full price rise');
+ assert.equal((await call('stock_trade',['FERN','sell',100])).value,10200);
+ console.log('PASS round-trip exploit, split orders, reverse cycles, price bounds and execution totals');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}

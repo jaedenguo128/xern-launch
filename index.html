@@ -1678,8 +1678,8 @@ input::placeholder{color:var(--muted);opacity:.8}
     var buy=Number($("buyAmt").value), sell=Number($("sellAmt").value), c=curStock();
     if(!c){$("buyEst").textContent="";$("sellEst").textContent="";return;}
     var price=Number(c.price), held=Number(stk.hold[c.symbol]||0);
-    $("buyEst").textContent=Number.isSafeInteger(buy)&&buy>0 ? "Estimated cost: "+fm(Math.round(buy*price))+" Xergs · "+fm(buy,0)+" whole shares" : (buy>0?"Enter a whole number of shares.":"");
-    $("sellEst").textContent=Number.isSafeInteger(sell)&&sell>0 ? "Estimated proceeds: "+fm(Math.round(Math.min(sell,held)*price))+" Xergs"+(sell>Math.floor(held)&&!(held>0&&held<1&&sell===1)?" · not enough shares":"") : (sell>0?"Enter a whole number of shares.":"");
+    $("buyEst").textContent=Number.isSafeInteger(buy)&&buy>0 ? "Quote before price impact: "+fm(Math.round(buy*price))+" Xergs · "+fm(buy,0)+" whole shares · final cost includes price impact" : (buy>0?"Enter a whole number of shares.":"");
+    $("sellEst").textContent=Number.isSafeInteger(sell)&&sell>0 ? "Quote before price impact: "+fm(Math.round(Math.min(sell,held)*price))+" Xergs · final proceeds include price impact"+(sell>Math.floor(held)&&!(held>0&&held<1&&sell===1)?" · not enough shares":"") : (sell>0?"Enter a whole number of shares.":"");
   }
   function stkRenderList(){
     var html = "";
