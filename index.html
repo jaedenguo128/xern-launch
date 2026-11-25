@@ -1163,7 +1163,8 @@ input::placeholder{color:var(--muted);opacity:.8}
 </section>
   <section class="page" id="page-warfare" hidden>
 <div id="warfareBattleBar" style="display:none;position:sticky;top:0;z-index:20;background:#101d34;border:1px solid #60718a;border-radius:10px;padding:12px;margin-bottom:12px;color:white">
-<strong id="battleTitle">⚔️ Colony battle</strong>
+<button id="battleClose" type="button" aria-label="Close war and colony health popup" title="Close" style="position:absolute;top:6px;right:6px;width:36px;height:36px;padding:0;border:1px solid #60718a;border-radius:8px;background:#182a46;color:white;font-size:24px;line-height:1;cursor:pointer;pointer-events:auto">×</button>
+<strong id="battleTitle" style="display:block;padding-right:38px">⚔️ Colony battle</strong>
 <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">
 <div style="flex:1;min-width:130px"><small>Your colony <span id="battleOurText">100%</span></small><div style="height:17px;background:#29334b;border-radius:9px;overflow:hidden"><div id="battleOurHealth" style="height:100%;width:100%;background:#32a8ff;transition:width 1.4s"></div></div></div>
 <div style="flex:1;min-width:130px"><small>Enemy colony <span id="battleTheirText">100%</span></small><div style="height:17px;background:#29334b;border-radius:9px;overflow:hidden"><div id="battleTheirHealth" style="height:100%;width:100%;background:#f65a68;transition:width 1.4s"></div></div></div>
@@ -2781,6 +2782,11 @@ input::placeholder{color:var(--muted);opacity:.8}
     liveWarBar.style.pointerEvents='none';
   }
   var lastLiveWarId=null,lastLiveWarRound=-1,liveWarPending=false,nextBattleCheckAt=0;
+  var dismissedWarPopups=new Set(),visibleWarPopupKey=null;
+  $('battleClose').addEventListener('click',function(){
+    if(visibleWarPopupKey)dismissedWarPopups.add(visibleWarPopupKey);
+    liveWarBar.style.display='none';
+  });
   async function syncLiveWar(force){
     var session=loadSession();if(document.hidden||liveWarPending||!session||!session.access_token||(!force&&Date.now()<nextBattleCheckAt))return;
     nextBattleCheckAt=Date.now()+12000;
@@ -2798,7 +2804,8 @@ input::placeholder{color:var(--muted);opacity:.8}
       var myHp=Number(mineAttacks?b.attacker_hp:b.defender_hp),myMax=Math.max(1,Number(mineAttacks?b.attacker_max_hp:b.defender_max_hp));
       var theirHp=Number(mineAttacks?b.defender_hp:b.attacker_hp),theirMax=Math.max(1,Number(mineAttacks?b.defender_max_hp:b.attacker_max_hp));
       var myPercent=Math.max(0,Math.min(100,Math.round(myHp/myMax*100))),theirPercent=Math.max(0,Math.min(100,Math.round(theirHp/theirMax*100)));
-      liveWarBar.style.display='block';
+      visibleWarPopupKey=uid+':'+b.id;
+      liveWarBar.style.display=dismissedWarPopups.has(visibleWarPopupKey)?'none':'block';
       $('battleTitle').textContent='⚔️ LIVE WAR · '+b.plot_key+' · '+(mineAttacks?'Attacking':'Defending');
       $('battleOurHealth').style.width=myPercent+'%';$('battleTheirHealth').style.width=theirPercent+'%';
       $('battleOurText').textContent=myPercent+'%';$('battleTheirText').textContent=theirPercent+'%';
