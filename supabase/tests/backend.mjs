@@ -355,8 +355,37 @@ try{
  assert(xergBuy.ok);assert.equal(xergBuy.amount,30000);assert.equal(xergBuy.money,970000);
  const levelled=await call('team_level_unit',[deimos.id]);
  assert(levelled.ok);assert.equal(levelled.unit.level,2);assert.equal(levelled.unit.duplicate_tokens,0);
- for(const [stat,increment] of [['speed',2],['health',10],['attack_value',5],['gold_per_hour',5]])assert.equal(levelled.unit[stat],deimos[stat]+increment);
+ for(const [stat,increment] of [['speed',4],['health',30],['attack_value',12],['gold_per_hour',12]])assert.equal(levelled.unit[stat],deimos[stat]+increment);
  assert.equal(levelled.unit.claim_power,deimos.claim_power);
  console.log('PASS Deimos costs 30000 in either currency; levelling consumes cards and increases character stats');
+ await admin();
+ const legendary=(await db.query("insert into public.team_units(owner_id,unit_name,rarity,unit_type,speed,health,claim_power,attack_value,unit_count,gold_per_hour,duplicate_tokens) select $1,unit_name,rarity,unit_type,speed,health,claim_power,attack_value,0,gold_per_hour,10 from xern_private.unit_catalog where rarity='legendary' limit 1 returning *",[u])).rows[0];
+ await player(u);
+ const legendLevel=await call('team_level_unit',[legendary.id]);assert(legendLevel.ok);
+ for(const [stat,bonus] of [['speed',3],['health',20],['attack_value',8],['gold_per_hour',8]])assert.equal(legendLevel.unit[stat],legendary[stat]+bonus);
+ console.log('PASS larger legendary and Deimos level bonuses');
+ await admin();
+ await db.query("update public.team_units u set speed=c.speed+2,health=c.health+10,attack_value=c.attack_value+5,gold_per_hour=c.gold_per_hour+5 from xern_private.unit_catalog c where c.unit_name=u.unit_name and u.id in ($1,$2)",[deimos.id,legendary.id]);
+ const bonusMigration=await readFile(new URL('../bootstrap/21_rare_unit_level_bonuses.sql',import.meta.url),'utf8');
+ await exec(bonusMigration.slice(bonusMigration.indexOf('-- Settle existing income')));
+ const retro=(await db.query('select id,speed,health,attack_value,gold_per_hour from public.team_units where id in ($1,$2)',[deimos.id,legendary.id])).rows;
+ for(const row of retro){const expected=row.id===deimos.id?levelled.unit:legendLevel.unit;for(const stat of ['speed','health','attack_value','gold_per_hour'])assert.equal(row[stat],expected[stat]);}
+ console.log('PASS existing earned levels receive the additional bonuses');
+ await admin();await exec('select setseed(.42)');
+ await exec("update public.stock_quotes set price=case symbol when 'FERN' then 1 when 'BTC' then 100000000 when 'XERG' then 13 else 1000 end");
+ let upMoves=0,downMoves=0,stillMoves=0;
+ for(let tick=0;tick<20;tick++){
+   const previous=(await db.query("select q.symbol,q.price,coalesce(m.total,0) total from public.stock_quotes q left join xern_private.stock_movements m using(symbol)")).rows;
+   await exec('select xern_private.stock_market_tick()');
+   const current=(await db.query("select q.symbol,q.price,m.total from public.stock_quotes q join xern_private.stock_movements m using(symbol)")).rows;
+   for(const before of previous){const after=current.find(r=>r.symbol===before.symbol),delta=Number(after.price)-Number(before.price);
+     assert(Number.isInteger(Number(after.price))&&Number(after.price)>=1&&Number(after.price)<=100000000);
+     assert(Math.abs(delta)<=Math.max(1,Math.floor(Number(before.price)*.005)));
+     assert.equal(Number(after.total)-Number(before.total),delta,'random server moves must be tracked separately from player impact');
+     if(delta>0)upMoves++;else if(delta<0)downMoves++;else stillMoves++;
+   }
+ }
+ assert(upMoves>0&&downMoves>0&&stillMoves>0);
+ console.log('PASS independent small random stock moves, integer bounds, idle ticks and external-movement accounting');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
