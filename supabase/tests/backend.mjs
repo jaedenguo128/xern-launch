@@ -213,7 +213,7 @@ try{
  assert.equal((await db.query("select count(*)::integer n from public.land_claims")).rows[0].n,before+1);
  console.log('PASS circular connected exploration, balanced directions, territory-loss recovery and slower timing');
  await admin();
- await exec("update public.profiles set money=1000000000; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
+ await exec("delete from xern_private.stock_liquidity where symbol='FERN'; update public.profiles set money=1000000000; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
  await player(u);
  assert((await call('stock_trade',['FERN','buy',100])).ok);
  await admin();
@@ -222,7 +222,7 @@ try{
  assert((await call('stock_trade',['FERN','sell',100])).ok);
  await admin();
  assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),100);
- await exec("update public.stock_quotes set price=10,depth=1 where symbol='FERN'");
+ await exec("delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=10,depth=1 where symbol='FERN'");
  await player(u);
  assert((await call('stock_trade',['FERN','buy',10000])).ok);
  await admin();
@@ -330,5 +330,20 @@ try{
  const combined=Number((await db.query('select sum(money) total from public.profiles where id in ($1,$2)',[u,v])).rows[0].total);
  assert(combined<=2000000,'two-player round trip cannot mint money');
  console.log('PASS flat displayed buy price, own-trade sell protection, quote changes and cross-player accounting');
+ await admin();
+ await exec("delete from public.holdings where symbol='FERN'; delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=36,depth=1 where symbol='FERN'; update public.profiles set money=1000000");
+ await player(u);
+ const symmetricBuy=await call('stock_trade',['FERN','buy',1000,36]);
+ assert.equal(symmetricBuy.value,36000);
+ const buyMove=symmetricBuy.price-36;
+ assert(buyMove>0);
+ await admin();
+ await exec("update public.stock_quotes set price=price+1 where symbol='FERN'");
+ await player(u);
+ const symmetricSell=await call('stock_trade',['FERN','sell',1000]);
+ assert(symmetricSell.ok);
+ assert.equal(symmetricBuy.price+1-symmetricSell.price,buyMove,'market tick must not amplify sell movement');
+ assert.equal(symmetricSell.price,37,'equal buy/sell must cancel, preserving the external +1 move');
+ console.log('PASS symmetric buy/sell movement across market ticks, exact 36/share charge, no extra crash');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
