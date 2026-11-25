@@ -245,7 +245,12 @@ input::placeholder{color:var(--muted);opacity:.8}
 .stk-price{font-size:clamp(28px,5vw,40px);font-weight:700;line-height:1.1}
 .stk-hold{text-align:right;color:var(--muted);font-size:14px;line-height:1.6}
 .stk-hold b,.stk-sum b{color:var(--ink)}
-#stkChart{display:block;width:100%;height:220px;background:var(--sea);border:1px solid var(--line);border-radius:8px}
+.stk-chart-shell{background:linear-gradient(145deg,#0c192b,#081321);border:1px solid #263c53;border-radius:14px;overflow:hidden;box-shadow:inset 0 1px 0 #ffffff08}
+.stk-chart-top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:15px 18px 0;color:#9fb2ca;font:600 11px system-ui,sans-serif;letter-spacing:1.2px}
+.stk-chart-top strong{color:#e3edf8;font:600 12px ui-monospace,monospace;letter-spacing:0;text-align:right}
+#stkChart{display:block;width:100%;height:auto;aspect-ratio:720/320;touch-action:pan-y;color:#91a6c0;font:11px ui-monospace,monospace}
+#stkChart text{fill:currentColor}#stkChart .chart-price{fill:#081321;font-weight:800}#stkChart .chart-caption{font-size:10px;letter-spacing:1px}
+@media(max-width:500px){.stk-chart-top{padding:12px 12px 0;font-size:9px;letter-spacing:.6px}.stk-chart-top strong{font-size:10px}}
 .stk-trade{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
  .stk-trade .est{display:block;margin:5px 0 10px;font-size:12px;color:var(--muted);min-height:18px}
 .stk-trade .row{display:flex;gap:8px}
@@ -1112,7 +1117,7 @@ input::placeholder{color:var(--muted);opacity:.8}
           <div><h3 id="stkName">Loading…</h3><div class="stk-price" id="stkPrice"></div></div>
           <div class="stk-hold" id="stkHold"></div>
         </div>
-        <svg id="stkChart" viewBox="0 0 600 220" preserveAspectRatio="none" role="img" aria-label="Price chart"></svg>
+        <div class="stk-chart-shell"><div class="stk-chart-top"><span>PRICE HISTORY / XERGS</span><strong id="stkChartReadout">Waiting for market data</strong></div><svg id="stkChart" viewBox="0 0 720 320" role="img" aria-label="Price history chart"></svg></div>
         <p class="soon" id="stkRange" style="margin:6px 0 0;font-size:13px"></p>
         <div class="stk-trade">
           <div>
@@ -1739,15 +1744,37 @@ input::placeholder{color:var(--muted);opacity:.8}
     stkEst();
   }
   function drawChart(p){
-    var svg = $("stkChart");
-    if(p.length < 2){ svg.innerHTML = ""; $("stkRange").textContent = ""; return; }
-    var lo = Math.min.apply(null, p), hi = Math.max.apply(null, p);
-    var pad = (hi - lo) * 0.08 || hi * 0.02 || 1, min = lo - pad, max = hi + pad, W = 600, H = 220;
-    var pts = p.map(function(v, i){ return (i / (p.length - 1) * W).toFixed(1) + "," + (H - (v - min) / (max - min) * H).toFixed(1); });
-    var col = p[p.length - 1] >= p[0] ? "var(--ok)" : "var(--err)";
-    svg.innerHTML = '<polygon points="0,' + H + ' ' + pts.join(" ") + ' ' + W + ',' + H + '" style="fill:' + col + ';opacity:.15"/>' +
-      '<polyline points="' + pts.join(" ") + '" style="fill:none;stroke:' + col + ';stroke-width:2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
-    $("stkRange").textContent = "Low " + stockNumber(lo) + "  |  High " + stockNumber(hi) + "  |  last " + p.length + " price points";
+    var svg=$('stkChart'),readout=$('stkChartReadout');
+    p=p.filter(function(v){return Number.isFinite(v)&&v>=0;});
+    svg.onpointermove=null;svg.onpointerleave=null;
+    if(!p.length){svg.innerHTML='<text x="360" y="160" text-anchor="middle">No price history yet</text>';readout.textContent='Waiting for market data';$('stkRange').textContent='';return;}
+    var lo=Math.min.apply(null,p),hi=Math.max.apply(null,p),pad=(hi-lo)*.16||hi*.03||1;
+    var min=Math.max(0,lo-pad),max=hi+pad,L=22,R=626,T=28,B=274;
+    var x=function(i){return L+(p.length===1?.5:i/(p.length-1))*(R-L);};
+    var y=function(v){return B-(v-min)/(max-min)*(B-T);};
+    var last=p[p.length-1],change=last-p[0],pct=p[0]?change/p[0]*100:0,col=change>=0?'#36dfad':'#ff6785';
+    var summary=(change>=0?'+':'')+stockNumber(change)+' ('+(pct>=0?'+':'')+pct.toFixed(1)+'%) · THIS WINDOW';
+    readout.textContent=summary;readout.style.color=col;
+    var points=p.map(function(v,i){return x(i).toFixed(2)+','+y(v).toFixed(2);}),path='M'+points.join(' L');
+    var grid='';for(var i=0;i<=4;i++){var gy=T+(B-T)*i/4;grid+='<path d="M'+L+' '+gy+'H'+R+'" stroke="#22354b" stroke-dasharray="3 5"/><text x="640" y="'+(gy+4)+'">'+stockNumber(max-(max-min)*i/4)+'</text>';}
+    for(var j=0;j<=6;j++){var gx=L+(R-L)*j/6;grid+='<path d="M'+gx+' '+T+'V'+B+'" stroke="#192c41"/>';}
+    svg.setAttribute('aria-label','Price history: low '+stockNumber(lo)+', high '+stockNumber(hi)+', latest '+stockNumber(last)+' Xergs.');
+    svg.innerHTML='<defs><linearGradient id="stockArea" x1="0" y1="0" x2="0" y2="1"><stop stop-color="'+col+'" stop-opacity=".24"/><stop offset="1" stop-color="'+col+'" stop-opacity="0"/></linearGradient></defs>'+grid+
+      '<path d="'+path+' L'+x(p.length-1)+' '+B+' L'+x(0)+' '+B+' Z" fill="url(#stockArea)"/>'+
+      '<path d="M'+L+' '+y(last)+'H'+R+'" stroke="'+col+'" opacity=".5" stroke-dasharray="4 5"/>'+
+      '<path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>'+
+      '<circle cx="'+x(p.length-1)+'" cy="'+y(last)+'" r="7" fill="'+col+'" opacity=".15"/><circle cx="'+x(p.length-1)+'" cy="'+y(last)+'" r="3" fill="'+col+'"/>'+
+      '<rect x="633" y="'+(y(last)-11)+'" width="83" height="22" rx="4" fill="'+col+'"/><text class="chart-price" x="640" y="'+(y(last)+4)+'">'+stockNumber(last)+'</text>'+
+      '<text class="chart-caption" x="'+L+'" y="303">EARLIER</text><text class="chart-caption" x="'+R+'" y="303" text-anchor="end">LATEST</text>'+
+      '<g id="stockCrosshair" visibility="hidden" pointer-events="none"><path stroke="#c5d6e8" stroke-dasharray="3 4"/><circle r="4" fill="'+col+'" stroke="#e9f6ff" stroke-width="1.5"/></g>';
+    svg.onpointermove=function(e){var rect=svg.getBoundingClientRect();if(!rect.width)return;var px=(e.clientX-rect.left)*720/rect.width;
+      var index=Math.max(0,Math.min(p.length-1,Math.round((px-L)/(R-L)*(p.length-1))));
+      var cross=$('stockCrosshair');cross.setAttribute('visibility','visible');cross.querySelector('path').setAttribute('d','M'+x(index)+' '+T+'V'+B+' M'+L+' '+y(p[index])+'H'+R);
+      cross.querySelector('circle').setAttribute('cx',x(index));cross.querySelector('circle').setAttribute('cy',y(p[index]));
+      readout.textContent=stockNumber(p[index])+' Xergs · Update '+(index+1)+' / '+p.length;
+    };
+    svg.onpointerleave=function(){$('stockCrosshair').setAttribute('visibility','hidden');readout.textContent=summary;};
+    $('stkRange').textContent='Low '+stockNumber(lo)+'  |  High '+stockNumber(hi)+'  |  last '+p.length+' price points';
   }
   async function stkLoadChart(){
     var s = loadSession(); if(!s || !s.access_token) return;
