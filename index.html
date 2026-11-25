@@ -2345,13 +2345,24 @@ input::placeholder{color:var(--muted);opacity:.8}
   function landPointInFeature(lon,lat,feature){var g=feature.geometry;if(!g)return false;if(g.type==='Polygon')return landPointInPolygon([lon,lat],g.coordinates);if(g.type==='MultiPolygon')return g.coordinates.some(function(poly){return landPointInPolygon([lon,lat],poly);});return false;}
   function landCountryAt(lon,lat){for(var i=0;i<landCountryBounds.length;i++){var item=landCountryBounds[i],b=item.bounds;if(lon>=b.west&&lon<=b.east&&lat>=b.south&&lat<=b.north&&landPointInFeature(lon,lat,item.feature))return item.name;}return null;}
   // Native 2D canvas engine: no Leaflet, map tiles, or external mapping dependency.
-  var nativeVisualLand=null,nativeCanvas=null,nativeCtx=null,nativeLand=new Image(),nativeReady=false,nativeMaskCtx=null,nativeMaskPixels=null;
+  var nativeSquareLand=null,nativeVisualLand=null,nativeCanvas=null,nativeCtx=null,nativeLand=new Image(),nativeReady=false,nativeMaskCtx=null,nativeMaskPixels=null;
   var nativeCenter={lng:0,lat:8},nativeZoom=1,nativeDrag=null,nativeMarkers=[],nativeOtherTroops=[],nativeEnemyWalkers=[],warfareMarches=[];
-  function nativeMerc(lat){return Math.max(-90,Math.min(90,lat))/90;}
-  function nativeInvMerc(v){return Math.max(-90,Math.min(90,v*90));}
+  function nativeMerc(lat){return Math.sin(Math.max(-90,Math.min(90,lat))*Math.PI/180);}
+  function nativeInvMerc(v){return Math.asin(Math.max(-1,Math.min(1,v)))*180/Math.PI;}
+  // Resample the Earth image once into the same equal-area rows as ownership.
+  function nativeBuildSquareLand(){
+    var source=nativeVisualLand||nativeLand,w=source.width||source.naturalWidth,h=source.height||source.naturalHeight;
+    var canvas=document.createElement('canvas');canvas.width=w;canvas.height=LAND_Y_COUNT;
+    var ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
+    for(var row=0;row<LAND_Y_COUNT;row++){
+      var sourceY=Math.max(0,Math.min(h-1,Math.floor((90-landLat(row+.5))/180*h)));
+      ctx.drawImage(source,0,sourceY,w,1,0,row,w,1);
+    }
+    nativeSquareLand=canvas;
+  }
   function nativeSize(){return {w:nativeCanvas.clientWidth||900,h:nativeCanvas.clientHeight||600};}
   function nativeScale(){return nativeSize().w/360*nativeZoom*1.70;}
-  function nativeYScale(){return nativeSize().w/360*nativeZoom*.80;}
+  function nativeYScale(){return nativeScale()*LAND_Y_COUNT/LAND_X_COUNT;}
   function nativeProject(lat,lng){var z=nativeScale(),sz=nativeSize();return {x:sz.w/2+(lng-nativeCenter.lng)*z,y:sz.h/2-(nativeMerc(lat)-nativeMerc(nativeCenter.lat))*180*nativeYScale()};}
   function nativeUnproject(x,y){var z=nativeScale(),sz=nativeSize();return {lng:Math.max(-180,Math.min(179.999,nativeCenter.lng+(x-sz.w/2)/z)),lat:nativeInvMerc(nativeMerc(nativeCenter.lat)-(y-sz.h/2)/(180*nativeYScale()))};}
   // Land validity comes from the same embedded raster that is displayed, not
@@ -2603,30 +2614,21 @@ input::placeholder{color:var(--muted);opacity:.8}
     var size=nativeSize(),dpr=Math.min(2,devicePixelRatio||1);
     nativeCanvas.width=Math.round(size.w*dpr);nativeCanvas.height=Math.round(size.h*dpr);
     var ctx=nativeCtx;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#102e55';ctx.fillRect(0,0,size.w,size.h);
-    // The embedded Earth raster is drawn directly at its native pixel resolution.
+    // Draw the Earth raster resampled to the same square-cell grid as claims.
     // Never use a coarse display-cell factor that hides real territory at world zoom.
     var tl=nativeProject(90,-180),br=nativeProject(-90,180);
-    ctx.imageSmoothingEnabled=false;ctx.drawImage(nativeVisualLand||nativeLand,tl.x,tl.y,br.x-tl.x,br.y-tl.y);
+    ctx.imageSmoothingEnabled=false;ctx.drawImage(nativeSquareLand,tl.x,tl.y,br.x-tl.x,br.y-tl.y);
     var z=nativeScale(),cellPx=z*(360/LAND_X_COUNT),keys=Object.keys(landHoldings);
     // Draw contiguous ownership without individual cell borders.
     keys.forEach(function(key){var c=landPlotCoords(key);if(!c)return;var pos=nativeProject(landLat(c.y+1),landLon(c.x)),top=nativeProject(landLat(c.y),landLon(c.x));
       if(pos.x>size.w||pos.x+cellPx<0||top.y>size.h||pos.y<0)return;
       var h=landHoldings[key],mine=h.owner_id===landUserId;
       ctx.fillStyle=clanColorsByOwner[h.owner_id] || (mine?'#a348d9':nativeOwnerColor(h.owner_id||h.owner_name));
-      // Project plot corners individually. Preserve true latitude-dependent
-      // east/west ground distance via the area indicator; do not fake acreage.
+      // Project plot corners on the uniform equal-area grid; acreage stays unchanged.
       var left=pos.x,right=nativeProject(landLat(c.y+1),landLon(c.x+1)).x;
       var upper=top.y,lower=pos.y,pxW=Math.max(.15,right-left),pxH=Math.max(.15,lower-upper);
-      // At detailed zoom, clip claim colors against the Earth land mask so
-      // shoreline tiles follow actual raster coastlines, not ocean rectangles.
-      if(pxW>=3&&pxH>=3&&nativeMaskPixels){
-        var segments=Math.max(1,Math.min(14,Math.ceil(pxW/2)));
-        var rows=Math.max(1,Math.min(14,Math.ceil(pxH/2)));
-        for(var a=0;a<segments;a++)for(var b=0;b<rows;b++){
-          var lon=landLon(c.x+(a+.5)/segments),lat=landLat(c.y+(b+.5)/rows);
-          if(nativeIsLand(lon,lat))ctx.fillRect(left+a*pxW/segments,upper+b*pxH/rows,pxW/segments+.25,pxH/rows+.25);
-        }
-      }else ctx.fillRect(left,upper,pxW+.2,pxH+.2);
+      // Every plot is a complete square on the equal-area display grid.
+      ctx.fillRect(left,upper,pxW+.2,pxH+.2);
       // Fine gray boundaries show every 5,000-acre plot when zoomed in.
       if(pxW>=2.5&&pxH>=2.5){ctx.strokeStyle=mine?'rgba(245,250,255,.94)':'rgba(255,245,174,.96)';ctx.lineWidth=Math.max(.18,Math.min(.42,pxW*.024));ctx.strokeRect(left+.25,upper+.25,Math.max(.1,pxW-.5),Math.max(.1,pxH-.5));}
     });
@@ -2730,7 +2732,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   function landLoadMap(){
     if(nativeCanvas){landRenderGrid();return;}
     var holder=$('worldMap');holder.innerHTML='';nativeCanvas=document.createElement('canvas');nativeCanvas.style.cssText='width:100%;height:100%;display:block;touch-action:none;cursor:grab;image-rendering:pixelated';holder.appendChild(nativeCanvas);nativeCtx=nativeCanvas.getContext('2d');
-    nativeLand.onload=function(){var mc=document.createElement('canvas');mc.width=nativeLand.naturalWidth;mc.height=nativeLand.naturalHeight;nativeMaskCtx=mc.getContext('2d',{willReadFrequently:true});nativeMaskCtx.drawImage(nativeLand,0,0);nativeMaskPixels=nativeMaskCtx.getImageData(0,0,mc.width,mc.height).data;xernCleanTinyIslands();nativeReady=true;landMapReady=true;landMapLoading=false;landSyncClaims(false).then(function(){landSyncOtherTroops();nativeFocusOwnIfAvailable();landRenderGrid();warfareRefreshAssets();});};
+    nativeLand.onload=function(){var mc=document.createElement('canvas');mc.width=nativeLand.naturalWidth;mc.height=nativeLand.naturalHeight;nativeMaskCtx=mc.getContext('2d',{willReadFrequently:true});nativeMaskCtx.drawImage(nativeLand,0,0);nativeMaskPixels=nativeMaskCtx.getImageData(0,0,mc.width,mc.height).data;xernCleanTinyIslands();nativeBuildSquareLand();nativeReady=true;landMapReady=true;landMapLoading=false;landSyncClaims(false).then(function(){landSyncOtherTroops();nativeFocusOwnIfAvailable();landRenderGrid();warfareRefreshAssets();});};
     nativeLand.onerror=function(){
       landMapReady=false; landMapLoading=false;
       $('landMsg').textContent='The map image could not load. Reload the game to try again.';
