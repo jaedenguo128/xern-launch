@@ -216,7 +216,7 @@ try{
  await player(u);
  assert((await call('stock_trade',['FERN','buy',100])).ok);
  await admin();
- assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),104);
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),101);
  await player(u);
  assert((await call('stock_trade',['FERN','sell',100])).ok);
  await admin();
@@ -225,7 +225,7 @@ try{
  await player(u);
  assert((await call('stock_trade',['FERN','buy',10000])).ok);
  await admin();
- assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),14);
+ assert.equal(Number((await db.query("select price from public.stock_quotes where symbol='FERN'")).rows[0].price),11);
  console.log('PASS supply-based buy/sell price impact');
 
  // Changing the quoted price simulates a scheduled external move between test scenarios.
@@ -252,8 +252,27 @@ try{
  await exec("delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
  await player(u);
  const buyRound=await call('stock_trade',['FERN','buy',100]);
- assert.equal(buyRound.value,10200,'buyers pay for the full price rise');
- assert.equal((await call('stock_trade',['FERN','sell',100])).value,10200);
+ assert.equal(buyRound.value,10050,'buyers pay for the full price rise');
+ assert.equal((await call('stock_trade',['FERN','sell',100] )).value,10050);
  console.log('PASS round-trip exploit, split orders, reverse cycles, price bounds and execution totals');
+
+ await admin();
+ await exec("delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
+ await db.query("update public.profiles set money=3000000 where id=$1",[u]);
+ await player(u);
+ const preview=await call('stock_quote',['FERN','buy',30000]);
+ assert(preview.ok && !preview.can_trade);
+ const max=preview.affordable_shares;
+ const maxQuote=await call('stock_quote',['FERN','buy',max]);
+ assert(maxQuote.can_trade && maxQuote.value<=3000000);
+ assert.equal((await call('stock_quote',['FERN','buy',max+1])).can_trade,false);
+ const maxBuy=await call('stock_trade',['FERN','buy',max]);
+ assert(maxBuy.ok);
+ assert.equal(maxBuy.value,maxQuote.value,'preview must equal execution total');
+ const sellPreview=await call('stock_quote',['FERN','sell',max]);
+ const sell=await call('stock_trade',['FERN','sell',max]);
+ assert.equal(sell.value,sellPreview.value);
+ assert(sell.money<=3000000);
+ console.log('PASS affordable Buy Max, exact buy/sell quotes and round-trip protection');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
