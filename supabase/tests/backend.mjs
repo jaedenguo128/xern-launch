@@ -345,5 +345,18 @@ try{
  assert.equal(symmetricBuy.price+1-symmetricSell.price,buyMove,'market tick must not amplify sell movement');
  assert.equal(symmetricSell.price,37,'equal buy/sell must cancel, preserving the external +1 move');
  console.log('PASS symmetric buy/sell movement across market ticks, exact 36/share charge, no extra crash');
+ await admin();
+ await db.query("update public.profiles set money=1000000,gold=1000000 where id=$1",[u]);
+ const deimos=(await db.query("insert into public.team_units(owner_id,unit_name,rarity,unit_type,speed,health,claim_power,attack_value,unit_count,gold_per_hour,duplicate_tokens) select $1,unit_name,rarity,unit_type,speed,health,claim_power,attack_value,0,gold_per_hour,10 from xern_private.unit_catalog where unit_name='Deimos' returning *",[u])).rows[0];
+ await player(u);
+ const goldBuy=await call('team_trade_units',[deimos.id,1,'buy']);
+ assert(goldBuy.ok);assert.equal(goldBuy.amount,30000);assert.equal(goldBuy.money,1000000);assert.equal(goldBuy.gold,970000);
+ const xergBuy=await call('team_buy_units_xergs',[deimos.id,1]);
+ assert(xergBuy.ok);assert.equal(xergBuy.amount,30000);assert.equal(xergBuy.money,970000);
+ const levelled=await call('team_level_unit',[deimos.id]);
+ assert(levelled.ok);assert.equal(levelled.unit.level,2);assert.equal(levelled.unit.duplicate_tokens,0);
+ for(const [stat,increment] of [['speed',2],['health',10],['attack_value',5],['gold_per_hour',5]])assert.equal(levelled.unit[stat],deimos[stat]+increment);
+ assert.equal(levelled.unit.claim_power,deimos.claim_power);
+ console.log('PASS Deimos costs 30000 in either currency; levelling consumes cards and increases character stats');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
