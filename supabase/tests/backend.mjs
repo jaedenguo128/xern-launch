@@ -232,6 +232,8 @@ try{
  // Changing the quoted price simulates a scheduled external move between test scenarios.
  for(const [initialPrice,quantities] of [[100,[100]],[100,[10,10,10,10,10,10,10,10,10,10]],[1,[1,1,1,1]],[10,[10000]],[99999999,[1]]]){
    await admin();
+   await exec("delete from xern_private.stock_position_basis where symbol='FERN'; delete from xern_private.stock_player_impact where symbol='FERN'; delete from xern_private.stock_movements where symbol='FERN'");
+   await db.query("update public.holdings set shares=4,cost=4*$1 where owner_id=$2 and symbol='FERN'",[initialPrice,u]);
    await db.query("delete from xern_private.stock_liquidity where symbol='FERN'");
    await db.query("update public.stock_quotes set price=$1,depth=1 where symbol='FERN'",[initialPrice]);
    await db.query("update public.profiles set money=1000000000000 where id=$1",[u]);
@@ -251,17 +253,18 @@ try{
  }
  await admin();
  await exec("delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
+ await exec("delete from public.holdings where owner_id='"+u+"' and symbol='FERN'; delete from xern_private.stock_liquidity where symbol='FERN'");
  await player(u);
  const buyRound=await call('stock_trade',['FERN','buy',100]);
- assert.equal(buyRound.value,10200,'buyers pay for the full price rise');
- assert.equal((await call('stock_trade',['FERN','sell',100] )).value,10200);
+ assert.equal(buyRound.value,10000,'buyers pay the displayed quote');
+ assert.equal((await call('stock_trade',['FERN','sell',100] )).value,10000);
  console.log('PASS round-trip exploit, split orders, reverse cycles, price bounds and execution totals');
 
  await admin();
  await exec("delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=100,depth=1 where symbol='FERN'");
  await db.query("update public.profiles set money=3000000 where id=$1",[u]);
  await player(u);
- const preview=await call('stock_quote',['FERN','buy',30000]);
+ const preview=await call('stock_quote',['FERN','buy',30001]);
  assert(preview.ok && !preview.can_trade);
  const max=preview.affordable_shares;
  const maxQuote=await call('stock_quote',['FERN','buy',max]);
@@ -306,5 +309,26 @@ try{
    assert(Math.abs(head[0]-targetX)+Math.abs(head[1]-targetY)<Math.abs(originX-targetX)+Math.abs(originY-targetY),'rally head should move toward target');
  }
  console.log('PASS horizontal, vertical, diagonal and polar rally fronts with connected flanks');
+
+ await admin();
+ await exec("delete from public.holdings where symbol='FERN'; delete from xern_private.stock_player_impact where symbol='FERN'; delete from xern_private.stock_movements where symbol='FERN'; delete from xern_private.stock_liquidity where symbol='FERN'; update public.stock_quotes set price=100,depth=1 where symbol='FERN'; update public.profiles set money=1000000");
+ await player(u);
+ const quotedBuy=await call('stock_quote',['FERN','buy',100]);
+ assert.equal(quotedBuy.unit_price,100);
+ assert.equal(quotedBuy.value,10000);
+ assert.equal((await call('stock_trade',['FERN','buy',100,99])).error,'price_changed');
+ assert((await call('stock_trade',['FERN','buy',100,100])).ok);
+ assert.equal((await call('stock_quote',['FERN','sell',100])).unit_price,100,'own buying cannot inflate the sell quote');
+ await player(v);
+ assert((await call('stock_trade',['FERN','buy',100])).ok);
+ await player(u);
+ const otherSale=await call('stock_trade',['FERN','sell',100]);
+ assert(otherSale.value>10000,'other players can create legitimate gains');
+ await player(v);
+ assert((await call('stock_trade',['FERN','sell',100])).ok);
+ await admin();
+ const combined=Number((await db.query('select sum(money) total from public.profiles where id in ($1,$2)',[u,v])).rows[0].total);
+ assert(combined<=2000000,'two-player round trip cannot mint money');
+ console.log('PASS flat displayed buy price, own-trade sell protection, quote changes and cross-player accounting');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}

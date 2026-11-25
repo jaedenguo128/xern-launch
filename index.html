@@ -1693,7 +1693,7 @@ input::placeholder{color:var(--muted);opacity:.8}
           if(request!==stockQuoteGeneration||generation!==sessionGeneration)return;
           var quote=result.data||{};
           $(side+'Est').textContent=result.ok&&quote.ok?
-            (side==='buy'?'Estimated cost: ':'Estimated proceeds: ')+stockNumber(quote.value)+' Xergs · includes price impact'+
+            (side==='buy'?'Estimated cost: ':'Estimated proceeds: ')+stockNumber(quote.value)+' Xergs · '+stockNumber(quote.unit_price)+' per share'+(side==='sell'?' · excludes gains from your own trades':'')+
               (!quote.can_trade?(side==='buy'?' · Affordable: ':' · Owned: ')+stockNumber(quote.affordable_shares)+' shares':''):
             'Trade quote unavailable. Try again.';
         }catch(error){
@@ -1828,12 +1828,14 @@ input::placeholder{color:var(--muted);opacity:.8}
         stkNote(side==='buy'?'This order costs '+stockNumber(preview.data.value)+' Xergs. You can afford '+stockNumber(preview.data.affordable_shares)+' shares. Use Buy Max.':
           'You own '+stockNumber(preview.data.affordable_shares)+' whole shares available to sell.',true);return;
       }
-      var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt }, s.access_token);
+      var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt, p_expected_price: Number(preview.data.unit_price) }, s.access_token);
       var d = r.data || {};
       if(r.ok && d.ok){
         updateXergsDisplay(d.money);
         stkNote(side === "buy" ? "Invested " + stockNumber(d.value) + " Xergs and received " + stockNumber(d.shares) + " shares." : "Sold " + stockNumber(d.shares) + " shares for " + stockNumber(d.value) + " Xergs.");
         $("buyAmt").value = ""; $("sellAmt").value = "";
+      } else if(d.error === "price_changed"){
+        stkNote("The price changed before your trade. Review the updated quote and try again.",true);
       } else if(d.error === "whole_shares_required"){
         stkNote("Please enter a whole number of shares.", true);
       } else if(d.error === "too_small"){
