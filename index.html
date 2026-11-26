@@ -1131,7 +1131,7 @@ input::placeholder{color:var(--muted);opacity:.8}
           <div>
             <label for="sellAmt">Number of shares to sell</label>
             <div class="row"><input id="sellAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 5 shares"><button class="mini" id="sellMax" type="button">Max</button></div>
-            <small class="soon">Sell whole shares only. Max also lets you close an older fractional holding.</small>
+            <small class="soon">Sell whole shares only. Max selects all whole shares available.</small>
             <div class="est" id="sellEst"></div>
             <button class="go sell" id="sellBtn">Sell</button>
           </div>
@@ -1700,7 +1700,7 @@ input::placeholder{color:var(--muted);opacity:.8}
           if(request!==stockQuoteGeneration||generation!==sessionGeneration)return;
           var quote=result.data||{};
           $(side+'Est').textContent=result.ok&&quote.ok?
-            (side==='buy'?'Estimated cost: ':'Estimated proceeds: ')+stockNumber(quote.value)+' Xergs · '+stockNumber(quote.unit_price)+' per share'+(side==='sell'?' · excludes gains from your own trades':'')+
+            (side==='buy'?'Estimated cost: ':'Estimated proceeds: ')+stockNumber(quote.value)+' Xergs'+(side==='buy'?' · '+stockNumber(quote.unit_price)+' per share':' · protected sell total; excludes gains from your own trades')+
               (!quote.can_trade?(side==='buy'?' · Affordable: ':' · Owned: ')+stockNumber(quote.affordable_shares)+' shares':''):
             'Trade quote unavailable. Try again.';
         }catch(error){
@@ -1860,7 +1860,7 @@ input::placeholder{color:var(--muted);opacity:.8}
         stkNote(side==='buy'?'This order costs '+stockNumber(preview.data.value)+' Xergs. You can afford '+stockNumber(preview.data.affordable_shares)+' shares. Use Buy Max.':
           'You own '+stockNumber(preview.data.affordable_shares)+' whole shares available to sell.',true);return;
       }
-      var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt, p_expected_price: side==="buy"?displayedBuyPrice:Number(preview.data.unit_price) }, s.access_token);
+      var r = await api("/rest/v1/rpc/stock_trade", "POST", { p_symbol: c.symbol, p_side: side, p_amount: amt, p_expected_price: side==="buy"?displayedBuyPrice:Number(preview.data.unit_price), p_expected_value: Number(preview.data.value) }, s.access_token);
       var d = r.data || {};
       if(r.ok && d.ok){
         updateXergsDisplay(d.money);
@@ -1902,7 +1902,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     }catch(error){if(generation===sessionGeneration)stkNote('Could not calculate the maximum purchase. Try again.',true);}
     finally{button.disabled=false;}
   };
-  $("sellMax").onclick = function(){ var c = curStock(); if(!c){$("sellAmt").value="";return;} var held=Number(stk.hold[c.symbol]||0); $("sellAmt").value=held>0?Math.max(1,Math.floor(held)):0; stkEst(); };
+  $("sellMax").onclick = function(){ var c = curStock(); if(!c){$("sellAmt").value="";return;} var held=Number(stk.hold[c.symbol]||0); $("sellAmt").value=Math.max(0,Math.floor(held)); stkEst(); };
   $("buyBtn").onclick = function(){ stkTrade("buy"); };
   $("sellBtn").onclick = function(){ stkTrade("sell"); };
 

@@ -387,5 +387,35 @@ try{
  }
  assert(upMoves>0&&downMoves>0&&stillMoves>0);
  console.log('PASS independent small random stock moves, integer bounds, idle ticks and external-movement accounting');
+ await admin();await exec("delete from public.holdings where symbol='FERN'; delete from xern_private.stock_liquidity where symbol='FERN'; delete from xern_private.stock_player_impact where symbol='FERN'; delete from xern_private.stock_movements where symbol='FERN'; update public.stock_quotes set price=100,depth=1 where symbol='FERN'; update public.profiles set money=2000000");
+ await player(u);assert((await call('stock_trade',['FERN','buy',1])).ok);
+ await player(v);assert((await call('stock_trade',['FERN','buy',10000])).ok);
+ await player(u);assert((await call('stock_trade',['FERN','sell',1])).ok);
+ await player(v);assert((await call('stock_trade',['FERN','sell',10000])).ok);
+ await admin();const pooled=Number((await db.query('select sum(money) total from public.profiles where id in ($1,$2)',[u,v])).rows[0].total);
+ console.log('PASS tiny-order pump round trip cannot create pooled profit');
+ assert(pooled<=4000000,'small rounded trades must not create pooled profit');
+ for(const initial of [1,13,36,100,99999999])for(const [small,large]of [[1,10000],[2,1000],[7,30000],[100,1],[1000,10000]]){
+   await admin();await exec("delete from public.holdings where symbol='FERN'; delete from xern_private.stock_liquidity where symbol='FERN'; delete from xern_private.stock_player_impact where symbol='FERN'; delete from xern_private.stock_movements where symbol='FERN'; update public.profiles set money=1000000000000000");await db.query("update public.stock_quotes set price=$1,depth=1 where symbol='FERN'",[initial]);
+   await player(u);assert((await call('stock_trade',['FERN','buy',small])).ok);
+   await player(v);assert((await call('stock_trade',['FERN','buy',large])).ok);
+   await player(u);assert((await call('stock_trade',['FERN','sell',small])).ok);
+   await player(v);assert((await call('stock_trade',['FERN','sell',large])).ok);
+   await admin();const state=(await db.query("select (select sum(money) from public.profiles where id in ($1,$2)) money,(select price from public.stock_quotes where symbol='FERN') price",[u,v])).rows[0];
+   assert(Number(state.money)<=2000000000000000,'pooled arbitrage '+JSON.stringify({initial,small,large,money:state.money}));assert.equal(Number(state.price),initial,'net-zero shares must restore price');
+ }
+ console.log('PASS 25 uneven multi-account round trips including min/max prices');
+ let auditSeed=48271;const randomInt=max=>{auditSeed=(auditSeed*48271)%2147483647;return auditSeed%max;};
+ for(const initial of [1,13,36,100,99999999]){
+   await admin();await exec("delete from public.holdings where symbol='FERN'; delete from xern_private.stock_liquidity where symbol='FERN'; delete from xern_private.stock_player_impact where symbol='FERN'; delete from xern_private.stock_movements where symbol='FERN'; update public.profiles set money=1000000000000000");await db.query("update public.stock_quotes set price=$1,depth=1 where symbol='FERN'",[initial]);
+   const owned=[0,0];
+   for(let order=0;order<50;order++){const actor=randomInt(2),sell=owned[actor]>0&&randomInt(2)===0,n=sell?1+randomInt(owned[actor]):1+randomInt(500);await player([u,v][actor]);const t=await call('stock_trade',['FERN',sell?'sell':'buy',n]);assert(t.ok);owned[actor]+=sell?-n:n;}
+   for(let actor=0;actor<2;actor++){if(owned[actor]){await player([u,v][actor]);assert((await call('stock_trade',['FERN','sell',owned[actor]])).ok);}}
+   await admin();const ending=(await db.query("select (select sum(money) from public.profiles where id in ($1,$2)) money,(select price from public.stock_quotes where symbol='FERN') price",[u,v])).rows[0];
+   assert(Number(ending.money)<=2000000000000000,'mixed-order arbitrage '+JSON.stringify({initial,money:ending.money}));assert.equal(Number(ending.price),initial);
+ }
+ await player(u);const guardQuote=await call('stock_quote',['FERN','buy',1]);
+ assert.equal((await call('stock_trade',['FERN','buy',1,guardQuote.unit_price,guardQuote.value+1])).error,'price_changed');
+ console.log('PASS 250 mixed two-player orders, full liquidations, and exact-total race protection');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
