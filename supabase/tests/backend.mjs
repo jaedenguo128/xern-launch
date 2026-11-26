@@ -417,5 +417,27 @@ try{
  await player(u);const guardQuote=await call('stock_quote',['FERN','buy',1]);
  assert.equal((await call('stock_trade',['FERN','buy',1,guardQuote.unit_price,guardQuote.value+1])).error,'price_changed');
  console.log('PASS 250 mixed two-player orders, full liquidations, and exact-total race protection');
+ await admin();
+ const oldExpansion=await readFile(new URL('../bootstrap/16_whole_stock_prices_and_outward_frontiers.sql',import.meta.url),'utf8');
+ const referenceStart=oldExpansion.indexOf('create or replace function xern_private.next_exploration_plot(');
+ await exec(oldExpansion.slice(referenceStart,oldExpansion.indexOf('$$;',referenceStart)+3).replace('next_exploration_plot(','next_exploration_plot_reference('));
+ await exec("delete from public.land_claims; update xern_private.terrain set pixels=decode(repeat('ff',375),'hex')");
+ const radius=process.env.XERN_BENCHMARK==='1'?300:12;
+ await db.query("insert into public.land_claims(country_key,country_name,owner_id,owner_name) select 'plot:'||(4000+dx)||':'||(1400+dy),'Benchmark',$1,'Alpha' from generate_series(-$2::integer,$2::integer) dx cross join generate_series(-$2::integer,$2::integer) dy where dx*dx+dy*dy<=$2::integer*$2::integer",[u,radius]);
+ await db.query("insert into xern_private.exploration_rings(unit_id,anchor,radius) values($1,'plot:4000:1400',$2) on conflict(unit_id) do update set anchor=excluded.anchor,radius=excluded.radius",[unit,radius]);
+ await exec('analyze public.land_claims');
+ let oldMs=0,newMs=0,referencePlot,cachedPlot;
+ for(let run=0;run<3;run++){
+   const before=performance.now();referencePlot=(await db.query("select xern_private.next_exploration_plot_reference($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k;oldMs+=performance.now()-before;
+   const after=performance.now();cachedPlot=(await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k;newMs+=performance.now()-after;
+   assert.equal(cachedPlot,referencePlot,'cache preserves the exact old candidate order');assert(cachedPlot);
+ }
+ console.log('Expansion benchmark radius',radius,'reference ms',oldMs.toFixed(1),'cached ms',newMs.toFixed(1),'speedup',(oldMs/newMs).toFixed(1));
+
+ await db.query("insert into public.land_claims(country_key,country_name,owner_id,owner_name) values($1,'Changed ownership',$2,'Alpha')",[cachedPlot,u]);
+ const expectedNext=(await db.query("select xern_private.next_exploration_plot_reference($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k;
+ assert.equal((await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k,expectedNext,'new claims are respected without rebuilding cached geometry');
+ await player(u);await assert.rejects(db.query('select * from xern_private.exploration_candidates'),/permission denied/);
+ console.log('PASS large-world cached expansion equivalence, live ownership checks and private cache access');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}
