@@ -1,3 +1,6 @@
+-- Version derived geometry so existing caches rebuild lazily without changing real claims.
+alter table xern_private.exploration_candidate_sets add column generator_version integer not null default 1;
+
 create or replace function xern_private.next_exploration_plot(p_unit_id bigint,p_owner_id uuid,p_anchor text)
 returns text language plpgsql set search_path='' as $$
 declare center integer[]:=xern_private.plot_coordinates(p_anchor); state xern_private.exploration_rings;
@@ -15,7 +18,7 @@ begin
   end if;
   for attempt in 1..16 loop
     select * into cached from xern_private.exploration_candidate_sets where unit_id=p_unit_id;
-    if not found or cached.anchor<>p_anchor or cached.radius<>ring then
+    if not found or cached.anchor<>p_anchor or cached.radius<>ring or cached.generator_version<>2 then
       delete from xern_private.exploration_candidates where unit_id=p_unit_id;
       inner_radius:=greatest(0,ring-2);outer_radius:=ring+2;
       insert into xern_private.exploration_candidates(unit_id,plot_key,neighbors,priority,tie)
@@ -41,8 +44,8 @@ begin
           where nx between 0 and 8896 and ny between 0 and 2831),
         distance+abs(mod(hashtextextended(k||':'||p_unit_id,0),1000))::numeric/1000*greatest(24,ring*10),
         hashtextextended(k||':'||p_unit_id,0) from candidates;
-      insert into xern_private.exploration_candidate_sets values(p_unit_id,p_anchor,ring)
-        on conflict(unit_id) do update set anchor=excluded.anchor,radius=excluded.radius;
+      insert into xern_private.exploration_candidate_sets(unit_id,anchor,radius,generator_version) values(p_unit_id,p_anchor,ring,2)
+        on conflict(unit_id) do update set anchor=excluded.anchor,radius=excluded.radius,generator_version=excluded.generator_version;
     end if;
     -- Stop at the first valid candidate in exactly the previous ranking order.
     -- OFFSET prevents the lateral point lookup from becoming a territory-wide join.
@@ -74,5 +77,3 @@ end
 $$;
 
 
--- Rebuild derived geometry lazily; real claims and squad progress stay intact.
-update xern_private.exploration_candidate_sets set anchor='rebuild:'||anchor;
