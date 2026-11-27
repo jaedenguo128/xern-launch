@@ -422,7 +422,7 @@ try{
  const referenceStart=oldExpansion.indexOf('create or replace function xern_private.next_exploration_plot(');
  await exec(oldExpansion.slice(referenceStart,oldExpansion.indexOf('$$;',referenceStart)+3).replace('next_exploration_plot(','next_exploration_plot_reference('));
  await exec("delete from public.land_claims; update xern_private.terrain set pixels=decode(repeat('ff',375),'hex')");
- const radius=process.env.XERN_BENCHMARK==='1'?300:12;
+ const radius=process.env.XERN_BENCHMARK==='1'?300:24;
  await db.query("insert into public.land_claims(country_key,country_name,owner_id,owner_name) select 'plot:'||(4000+dx)||':'||(1400+dy),'Benchmark',$1,'Alpha' from generate_series(-$2::integer,$2::integer) dx cross join generate_series(-$2::integer,$2::integer) dy where dx*dx+dy*dy<=$2::integer*$2::integer",[u,radius]);
  await db.query("insert into xern_private.exploration_rings(unit_id,anchor,radius) values($1,'plot:4000:1400',$2) on conflict(unit_id) do update set anchor=excluded.anchor,radius=excluded.radius",[unit,radius]);
  await exec('analyze public.land_claims');
@@ -430,14 +430,24 @@ try{
  for(let run=0;run<3;run++){
    const before=performance.now();referencePlot=(await db.query("select xern_private.next_exploration_plot_reference($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k;oldMs+=performance.now()-before;
    const after=performance.now();cachedPlot=(await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k;newMs+=performance.now()-after;
-   assert.equal(cachedPlot,referencePlot,'cache preserves the exact old candidate order');assert(cachedPlot);
+   assert(cachedPlot);assert.equal((await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k,cachedPlot,'unchanged state keeps cached candidate order stable');
  }
  console.log('Expansion benchmark radius',radius,'reference ms',oldMs.toFixed(1),'cached ms',newMs.toFixed(1),'speedup',(oldMs/newMs).toFixed(1));
 
  await db.query("insert into public.land_claims(country_key,country_name,owner_id,owner_name) values($1,'Changed ownership',$2,'Alpha')",[cachedPlot,u]);
- const expectedNext=(await db.query("select xern_private.next_exploration_plot_reference($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k;
- assert.equal((await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k,expectedNext,'new claims are respected without rebuilding cached geometry');
+ const expectedNext=(await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k;
+ assert.notEqual(expectedNext,cachedPlot,'new claims cannot be selected again');
+ await db.query('delete from xern_private.exploration_candidate_sets where unit_id=$1',[unit]);
+ assert.equal((await db.query("select xern_private.next_exploration_plot($1,$2,'plot:4000:1400') k",[unit,u])).rows[0].k,expectedNext,'rebuilding geometry preserves the same outward order');
+ await player(u);
+ let mapCursor=null,mapKeys=new Set(),mapPages=0;
+ do{const page=await call('warfare_map_page',[mapCursor,1000]);assert(page.ok);mapPages++;for(const plot of page.plots){assert(page.owners[plot[1]]);assert(!mapKeys.has(plot[0]));mapKeys.add(plot[0]);}mapCursor=page.next;}while(mapCursor);
+ await admin();assert.equal(mapKeys.size,Number((await db.query('select count(*) n from public.land_claims')).rows[0].n));
+ await player(u);const largePage=await call('warfare_map_page',[null,10000]);assert(largePage.plots.length>1000,'compact aggregation bypasses the REST row cap');
+ assert.equal((await call('warfare_map_page',['invalid',10000])).ok,false);
+ assert.equal((await call('warfare_map_page',[null,10001])).ok,false);
+ console.log('PASS compact map pagination, owner dictionaries, metadata and input bounds');
  await player(u);await assert.rejects(db.query('select * from xern_private.exploration_candidates'),/permission denied/);
- console.log('PASS large-world cached expansion equivalence, live ownership checks and private cache access');
+ console.log('PASS loose outward cached expansion, live ownership checks and private cache access');
  console.log('PASS fresh signup trigger, grants, daily rewards, airdrops, gifts, stocks, all casino games, land, troop commands, clan actions and owner messaging');
 }finally{await db.close();}

@@ -2261,32 +2261,40 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   async function landSyncClaimsFresh(showMessage,useEdge){
     var s=landSession();if(!s||!s.access_token)return false;
-    try{var allRows=[],pageSize=1000,lastKey=null;
-      var edgeFirstPage=useEdge&&SHARED_READS_URL&&Object.keys(landHoldings).length<pageSize;
+    var generation=sessionGeneration;
+    try{
+      var fresh={},index=nativeCreateMapIndex(fresh),lastKey=null,compact=true,first=true;
       while(true){
-        var cursor=lastKey===null?'':'&country_key=gt.'+encodeURIComponent(lastKey);
-        var path='/rest/v1/land_claims?select=country_key,country_name,owner_id,owner_name,paid,area_km2&order=country_key.asc&limit='+pageSize+cursor;
-        var r=await api(path,'GET',null,s.access_token,edgeFirstPage&&!cursor);
-        // Multi-page snapshots read all pages from the origin.
-        if(edgeFirstPage&&!cursor&&Array.isArray(r.data)&&r.data.length===pageSize)r=await api(path,'GET',null,s.access_token);
-        if(!r.ok||!Array.isArray(r.data)){if(showMessage)$('landMsg').textContent='Could not refresh shared land ownership. Check your connection.';return false;}
-        allRows.push.apply(allRows,r.data);
-        if(r.data.length<pageSize)break;
-        lastKey=r.data[r.data.length-1].country_key;
+        var path=compact?'/rest/v1/rpc/warfare_map_page?p_limit=10000'+(lastKey===null?'':'&p_after='+encodeURIComponent(lastKey)):
+          '/rest/v1/land_claims?select=country_key,country_name,owner_id,owner_name,paid,area_km2&order=country_key.asc&limit=1000'+(lastKey===null?'':'&country_key=gt.'+encodeURIComponent(lastKey));
+        var r=await api(path,'GET',null,s.access_token);
+        if(generation!==sessionGeneration)return false;
+        if(compact&&first&&r.status===404){compact=false;continue;}
+        first=false;
+        var data=r.data,rows;
+        if(!r.ok||(compact?(!data||!data.ok||!Array.isArray(data.plots)||!Array.isArray(data.owners)):!Array.isArray(data))){
+          if(showMessage)$('landMsg').textContent='Could not refresh shared land ownership. Check your connection.';return false;
+        }
+        rows=compact?data.plots:data;
+        for(var i=0;i<rows.length;i++){
+          var row=rows[i],owner=compact?data.owners[row[1]]:null,key=String(compact?row[0]:row.country_key).toLowerCase();
+          var h=compact?{owner:owner[1],owner_id:owner[0],owner_name:owner[1],paid:Number(row[2])||0,area_km2:row[3]==null?20.234282:Number(row[3]),country_name:row[4]||'Explored territory'}:
+            {owner:row.owner_name,owner_id:row.owner_id,owner_name:row.owner_name,paid:Number(row.paid)||0,area_km2:Number(row.area_km2)||20.234282,country_name:row.country_name};
+          fresh[key]=h;nativeAddMapHolding(index,key,h);
+          if(i>0&&i%2000===0){await new Promise(function(resolve){setTimeout(resolve,0);});if(generation!==sessionGeneration)return false;}
+        }
+        if(compact){if(!data.next)break;lastKey=data.next;}else{if(rows.length<1000)break;lastKey=rows[rows.length-1].country_key;}
       }
-      var fresh={};allRows.forEach(function(row){fresh[String(row.country_key).toLowerCase()]={owner:row.owner_name,owner_id:row.owner_id,owner_name:row.owner_name,paid:Number(row.paid)||0,area_km2:Number(row.area_km2)||20.2343,country_name:row.country_name};});
-      // Server ownership is authoritative. Never hide owned plots based on a client image mask.
-      landHoldings=fresh;landClaimsLastApplied=Date.now();landRenderLeaderboard();if(landOwnedCount()&&!landHomebaseKey()){var existing=landOwnedKeys().sort()[0];if(existing)landRememberHomebase(existing);}landRefreshStyles();landRefreshPanel();return true;
+      // Swap complete snapshots only; panning keeps using the previous one while loading.
+      if(generation!==sessionGeneration)return false;
+      landHoldings=fresh;nativeMapIndex=index;troopOwnedCache={};landClaimsLastApplied=Date.now();landRenderLeaderboard();
+      if(landOwnedCount()&&!landHomebaseKey()){var existing=landOwnedKeys()[0];if(existing)landRememberHomebase(existing);}
+      landRefreshStyles();landRefreshPanel();return true;
     }catch(e){if(showMessage)$('landMsg').textContent='Could not refresh shared land ownership. Check your connection.';return false;}
   }
   function landRenderLeaderboard(){
     var root=document.getElementById('territoryLeaderboard');if(!root)return;
-    var players=new Map();
-    Object.keys(landHoldings).forEach(function(key){var h=landHoldings[key];if(!h||!h.owner_id)return;
-      var id=String(h.owner_id),player=players.get(id);
-      if(!player){player={id:id,name:String(h.owner_name||h.owner||'Unknown player'),plots:0};players.set(id,player);}
-      player.plots++;
-    });
+    var players=nativeGetMapIndex().owners;
     var ranked=Array.from(players.values()).sort(function(a,b){return b.plots-a.plots||a.name.localeCompare(b.name);});
     root.replaceChildren();
     if(!ranked.length){var empty=document.createElement('p');empty.className='land-note';empty.textContent='No claimed territory yet. Be the first to establish a homebase!';root.appendChild(empty);return;}
@@ -2319,7 +2327,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   function landPlotArea(){return 20.234282;}
   function landPlotName(plot){return (plot.country||'Land')+' · '+(plot.x+1)+','+(plot.y+1);}
   function landPlotFromCell(x,y,country){return {type:'Feature',properties:{plot_key:landPlotKey(x,y),plot_name:landPlotName({x:x,y:y,country:country}),country_name:country||'Land',x:x,y:y,area_km2:landPlotArea()},geometry:{type:'Polygon',coordinates:[[[landLon(x),landLat(y)],[landLon(x+1),landLat(y)],[landLon(x+1),landLat(y+1)],[landLon(x),landLat(y+1)],[landLon(x),landLat(y)]]]}};}
-  function landOwnedKeys(){return Object.keys(landHoldings).filter(function(k){return landHoldings[k]&&landHoldings[k].owner_id===landUserId;});}
+  function landOwnedKeys(){var owner=nativeGetMapIndex().owners.get(landUserId);return owner?owner.keys:[];}
   function landOwnedCount(){return landOwnedKeys().length;}
   function landAdjacentKey(key){var c=landPlotCoords(key);if(!c)return [];var a=[];if(c.x>0)a.push(landPlotKey(c.x-1,c.y));if(c.x<LAND_X_COUNT-1)a.push(landPlotKey(c.x+1,c.y));if(c.y>0)a.push(landPlotKey(c.x,c.y-1));if(c.y<LAND_Y_COUNT-1)a.push(landPlotKey(c.x,c.y+1));return a;}
   function landIsAdjacentToMine(key){return landOwnedKeys().some(function(k){return landAdjacentKey(k).indexOf(key)>=0;});}
@@ -2348,7 +2356,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   }
   function landRefreshPanel(){
     var coord=$('landCoordinates');if(coord&&landSelected&&landSelected.properties){var cp=landPlotCoords(landSelected.properties.plot_key);coord.textContent=cp?((landLat(cp.y+.5)).toFixed(2)+'°, '+(landLon(cp.x+.5)).toFixed(2)+'°'):'Selected area';}else if(coord)coord.textContent='Click the map to choose an area';
-    $('landBalance').textContent=landMoney(getBalance());$('landOwnedCount').textContent=landMoney(landOwnedCount());if($('landOwnedAcres'))$('landOwnedAcres').textContent=landMoney(landOwnedCount()*5000);if(nativeMaskPixels){var bad=landOwnedKeys().filter(function(k){return !nativePlotIsLand(k);}).length;if(bad&&$('warSellMsg')&&!$('warSellMsg').textContent)$('warSellMsg').textContent=bad+' plots appear over water. Existing claims have not been moved.';}
+    $('landBalance').textContent=landMoney(getBalance());$('landOwnedCount').textContent=landMoney(landOwnedCount());if($('landOwnedAcres'))$('landOwnedAcres').textContent=landMoney(landOwnedCount()*5000);if(nativeMaskPixels){var ownIndex=nativeGetMapIndex().owners.get(landUserId),bad=ownIndex?ownIndex.keys.length-ownIndex.landKeys.length:0;if(bad&&$('warSellMsg')&&!$('warSellMsg').textContent)$('warSellMsg').textContent=bad+' plots appear over water. Existing claims have not been moved.';}
     var first=landFirstPlot,hasHome=landHasHomebase();
     if(!first){$('landCountry').textContent=hasHome?'🏰 Homebase established':'🌍 Pick a homebase area';$('landOwner').textContent=hasHome?'Your territory':'Unclaimed';$('landPrice').textContent=hasHome?'Squad expansion only':String(LAND_BUY_PRICE);$('landBuy').textContent=hasHome?'Homebase claimed · Expand with squad':'Claim Homebase · '+LAND_BUY_PRICE+' Xergs';$('landBuy').disabled=true;return;}
     var p=first.properties,key=p.plot_key,h=landHoldings[key],mine=!!(h&&h.owner_id===landUserId);
@@ -2445,7 +2453,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     return true;
   }
   function nativePlotPosition(key){var c=landPlotCoords(key);return c?nativeProject(landLat(c.y+.5),landLon(c.x+.5)):null;}
-  function nativeOwnCenter(){var keys=landOwnedKeys();if(!keys.length)return null;var sx=0,sy=0;keys.forEach(function(k){var c=landPlotCoords(k);if(c){sx+=c.x;sy+=c.y;}});return {lng:landLon(sx/keys.length+.5),lat:landLat(sy/keys.length+.5)};}
+  function nativeOwnCenter(){var owner=nativeGetMapIndex().owners.get(landUserId);return owner&&owner.plots?{lng:landLon(owner.sumX/owner.plots+.5),lat:landLat(owner.sumY/owner.plots+.5)}:null;}
   function nativeFocusOwn(){var c=nativeOwnCenter();if(!c){$('landMsg').textContent='Claim land before using My land.';return;}nativeCenter=c;nativeZoom=10;landRenderGrid();}
   // Preserve walkers across roster refreshes. Each walker chooses its own
   // frontier destination and never teleports back to its initial spawn.
@@ -2494,11 +2502,11 @@ input::placeholder{color:var(--muted);opacity:.8}
   function landRenderRallyMarkers(){
     var owned=landOwnedKeys(), old=new Map(nativeMarkers.map(function(m){return [m.markerId,m];}));
     var next=[];if(!owned.length){nativeMarkers=[];landRenderGrid();return;}
-    var safeOwned=owned.filter(nativePlotIsLand);if(!safeOwned.length)return;
+    var safeOwned=nativeOwnerLand(landUserId);if(!safeOwned.length)return;
     var visibleRemaining=XERN_MAX_VISIBLE_TROOPS;
     (teamUnits||[]).filter(function(u){return !!u.stationed_plot_key&&Number(u.unit_count)>0;}).forEach(function(u){
       var count=Math.min(visibleRemaining,Math.max(0,Math.floor(Number(u.unit_count)||0)));visibleRemaining-=count;var command=landUnitCommands[u.id]||'explore';
-      var start=safeOwned.includes(u.stationed_plot_key)?u.stationed_plot_key:safeOwned[0];
+      var start=nativeOwnedLandHas(u.stationed_plot_key,landUserId)?u.stationed_plot_key:safeOwned[0];
       for(var i=0;i<count;i++){
         var id=String(u.id)+':'+i,m=old.get(id);
         if(m&&landHoldings[m.walkTo]&&landHoldings[m.walkTo].owner_id===landUserId){m.unit=u;m.command=command;m.homeKey=start;next.push(m);continue;}
@@ -2544,6 +2552,8 @@ input::placeholder{color:var(--muted);opacity:.8}
         warfareMarches=mr.ok&&Array.isArray(mr.data)?mr.data:[];
         var marchIndex={};warfareMarches.forEach(function(m){marchIndex[m.unit_id]=m;});
         nativeEnemyWalkers.forEach(function(w){var m=marchIndex[w.unit.id];if(m){w.homeKey=m.current_plot_key;w.march=m;}});
+        var visibleIds=new Set(nativeEnemyWalkers.map(function(w){return String(w.id);}));
+        Object.keys(troopPositionCache).forEach(function(id){if(!visibleIds.has(id))delete troopPositionCache[id];});
         landRenderGrid();
         if(typeof warfareRender==='function')warfareRender();
       }
@@ -2556,11 +2566,9 @@ input::placeholder{color:var(--muted);opacity:.8}
   function xernTroopRandom(st){st.rng=(Math.imul(st.rng,1664525)+1013904223)>>>0;return st.rng/4294967296;}
   function sharedTroopPosition(w){
     var id=String(w.id),owner=w.ownerId,now=Date.now(),seed=xernTroopHash(id);
-    var cache=troopOwnedCache[owner];
-    if(!cache||now-cache.at>12000){
-      var plots=Object.keys(landHoldings).filter(function(k){return landHoldings[k]&&landHoldings[k].owner_id===owner&&nativePlotIsLand(k);});
-      // Sorting ensures each squad member has a stable, widely dispersed home.
-      plots.sort();cache={at:now,plots:plots,set:new Set(plots)};troopOwnedCache[owner]=cache;
+    var index=nativeGetMapIndex(),cache=troopOwnedCache[owner];
+    if(!cache||cache.revision!==index.revision){
+      cache={revision:index.revision,plots:nativeOwnerLand(owner),set:{has:function(k){return nativeOwnedLandHas(k,owner);}}};troopOwnedCache[owner]=cache;
     }
     if(!cache.plots.length)return null;
     var st=troopPositionCache[id];
@@ -2639,47 +2647,103 @@ input::placeholder{color:var(--muted);opacity:.8}
     warfareCombatFx.push({key:key,start:start,winner:winner});
     if(warfareCombatFx.length>12)warfareCombatFx.shift();
   }
+  // Ownership is indexed once per snapshot; animation never scans the whole world.
+  var nativeMapIndex=null,nativeMapRevision=0,nativeStaticLayer=null,nativeStaticStamp='',nativeRenderQueued=false,nativePalette=null,nativePaletteStamp='';
+  var NATIVE_CHUNK_SIZE=64;
+  function nativeCreateMapIndex(source){return {source:source,keys:[],owners:new Map(),chunks:new Map(),revision:++nativeMapRevision};}
+  function nativeAddMapHolding(index,key,h){
+    var c=landPlotCoords(key);if(!c)return;
+    h._key=key;h._x=c.x;h._y=c.y;h._land=!nativeMaskPixels||nativePlotIsLand(key);
+    index.keys.push(key);
+    var owner=index.owners.get(h.owner_id);
+    if(!owner){owner={id:h.owner_id,name:h.owner_name||h.owner||'Player',keys:[],landKeys:[],plots:0,sumX:0,sumY:0,base:key};index.owners.set(h.owner_id,owner);}
+    owner.keys.push(key);if(h._land)owner.landKeys.push(key);owner.plots++;owner.sumX+=c.x;owner.sumY+=c.y;if(key<owner.base)owner.base=key;
+    var cx=Math.floor(c.x/NATIVE_CHUNK_SIZE),cy=Math.floor(c.y/NATIVE_CHUNK_SIZE),chunkKey=cx+':'+cy,chunk=index.chunks.get(chunkKey);
+    if(!chunk){chunk={x:cx,y:cy,cells:[],canvas:null,stamp:''};index.chunks.set(chunkKey,chunk);}
+    chunk.cells.push(h);
+  }
+  function nativeGetMapIndex(){
+    if(!nativeMapIndex||nativeMapIndex.source!==landHoldings){
+      var index=nativeCreateMapIndex(landHoldings);
+      Object.keys(landHoldings).forEach(function(key){nativeAddMapHolding(index,key,landHoldings[key]);});
+      nativeMapIndex=index;
+    }
+    return nativeMapIndex;
+  }
+  function nativeOwnerLand(ownerId){var owner=nativeGetMapIndex().owners.get(ownerId);return owner?owner.landKeys:[];}
+  function nativeOwnedLandHas(key,ownerId){var h=landHoldings[key];return !!h&&h.owner_id===ownerId&&h._land;}
+  function nativeChunkTexture(chunk,palette,stamp){
+    if(chunk.canvas&&chunk.stamp===stamp)return chunk.canvas;
+    var canvas=chunk.canvas||document.createElement('canvas');canvas.width=NATIVE_CHUNK_SIZE;canvas.height=NATIVE_CHUNK_SIZE;
+    var ctx=canvas.getContext('2d'),image=ctx.createImageData(NATIVE_CHUNK_SIZE,NATIVE_CHUNK_SIZE);
+    chunk.cells.forEach(function(h){var rgba=palette.get(h.owner_id),at=((h._y%NATIVE_CHUNK_SIZE)*NATIVE_CHUNK_SIZE+h._x%NATIVE_CHUNK_SIZE)*4;
+      image.data[at]=rgba[0];image.data[at+1]=rgba[1];image.data[at+2]=rgba[2];image.data[at+3]=255;
+    });
+    ctx.putImageData(image,0,0);chunk.canvas=canvas;chunk.stamp=stamp;return canvas;
+  }
+  function nativeDrawTerritory(ctx,size,index,paletteStamp){
+    var origin=nativeProject(90,-180),px=nativeScale()*360/LAND_X_COUNT,chunkPx=px*NATIVE_CHUNK_SIZE;
+    var x0=Math.max(0,Math.floor(-origin.x/chunkPx)),x1=Math.min(Math.ceil(LAND_X_COUNT/NATIVE_CHUNK_SIZE)-1,Math.floor((size.w-origin.x)/chunkPx));
+    var y0=Math.max(0,Math.floor(-origin.y/chunkPx)),y1=Math.min(Math.ceil(LAND_Y_COUNT/NATIVE_CHUNK_SIZE)-1,Math.floor((size.h-origin.y)/chunkPx));
+    var paletteKey=paletteStamp+'|'+index.revision;
+    if(!nativePalette||nativePaletteStamp!==paletteKey){
+      nativePalette=new Map();var swatch=document.createElement('canvas');swatch.width=swatch.height=1;var sc=swatch.getContext('2d');
+      index.owners.forEach(function(owner){sc.clearRect(0,0,1,1);sc.fillStyle=clanColorsByOwner[owner.id]||(owner.id===landUserId?'#a348d9':nativeOwnerColor(owner.id||owner.name));sc.fillRect(0,0,1,1);nativePalette.set(owner.id,sc.getImageData(0,0,1,1).data);});
+      nativePaletteStamp=paletteKey;
+    }
+    var palette=nativePalette;
+    var visible=[];
+    for(var cy=y0;cy<=y1;cy++)for(var cx=x0;cx<=x1;cx++){
+      var chunk=index.chunks.get(cx+':'+cy);if(!chunk)continue;visible.push(chunk);
+      ctx.drawImage(nativeChunkTexture(chunk,palette,paletteStamp),origin.x+cx*chunkPx,origin.y+cy*chunkPx,chunkPx,chunkPx);
+    }
+    // Fine tile boundaries only need the visible chunks, not every owned tile.
+    if(px>=2.5){
+      ctx.beginPath();
+      visible.forEach(function(chunk){chunk.cells.forEach(function(h){var left=origin.x+h._x*px,top=origin.y+h._y*px;
+        if(left+px<0||top+px<0||left>size.w||top>size.h)return;
+        ctx.rect(left+.25,top+.25,Math.max(.1,px-.5),Math.max(.1,px-.5));
+      });});
+      ctx.strokeStyle='rgba(242,246,255,.55)';ctx.lineWidth=Math.max(.18,Math.min(.42,px*.024));ctx.stroke();
+    }
+    index.owners.forEach(function(owner){
+      if(owner.id===landUserId)return;var pos=nativePlotPosition(owner.base);if(!pos||pos.x<0||pos.y<0||pos.x>size.w||pos.y>size.h)return;
+      var label=String(owner.name).slice(0,24),fontSize=Math.max(9,Math.min(13,8+nativeZoom*.45));
+      ctx.font='bold '+fontSize+'px sans-serif';ctx.textAlign='center';var width=Math.min(180,ctx.measureText(label).width+14);
+      ctx.fillStyle='rgba(8,20,36,.84)';ctx.fillRect(pos.x-width/2,pos.y-32,width,20);ctx.fillStyle='#fff';ctx.fillText(label,pos.x,pos.y-17);
+    });
+  }
+  function nativeDrawStaticMap(ctx,size,dpr){
+    var index=nativeGetMapIndex(),paletteStamp=JSON.stringify(clanColorsByOwner)+'|'+landUserId;
+    var stamp=[index.revision,paletteStamp,size.w,size.h,dpr,nativeCenter.lng,nativeCenter.lat,nativeZoom].join('|');
+    if(!nativeStaticLayer)nativeStaticLayer=document.createElement('canvas');
+    if(stamp!==nativeStaticStamp){
+      var w=Math.round(size.w*dpr),h=Math.round(size.h*dpr);
+      if(nativeStaticLayer.width!==w)nativeStaticLayer.width=w;if(nativeStaticLayer.height!==h)nativeStaticLayer.height=h;
+      var layer=nativeStaticLayer.getContext('2d');layer.setTransform(dpr,0,0,dpr,0,0);layer.fillStyle='#102e55';layer.fillRect(0,0,size.w,size.h);
+      var tl=nativeProject(90,-180),br=nativeProject(-90,180);layer.imageSmoothingEnabled=false;
+      layer.drawImage(nativeSquareLand,tl.x,tl.y,br.x-tl.x,br.y-tl.y);nativeDrawTerritory(layer,size,index,paletteStamp);
+      nativeStaticStamp=stamp;
+    }
+    ctx.drawImage(nativeStaticLayer,0,0,size.w,size.h);
+  }
+  function nativeEquipmentPlot(a){
+    if((a.kind!=='tank'&&a.kind!=='truck')||a.owner_id!==landUserId)return a.plot_key;
+    var owned=nativeOwnerLand(landUserId);if(!owned.length)return a.plot_key;
+    var start=Math.floor(Date.now()/3500+Number(a.id||0));
+    for(var i=0;i<Math.min(32,owned.length);i++){var key=owned[(start+i)%owned.length];if(nativePlotIsSafe(key))return key;}
+    return a.plot_key;
+  }
   function landScheduleGridRender(){landRenderGrid();}
   function landRenderGrid(){
+    if(nativeRenderQueued||!nativeCanvas||!nativeReady)return;
+    nativeRenderQueued=true;requestAnimationFrame(function(){nativeRenderQueued=false;if(!document.hidden&&!$('page-warfare').hidden)nativePaintGrid();});
+  }
+  function nativePaintGrid(){
     if(!nativeCanvas||!nativeReady)return;
-    var size=nativeSize(),dpr=Math.min(2,devicePixelRatio||1);
-    nativeCanvas.width=Math.round(size.w*dpr);nativeCanvas.height=Math.round(size.h*dpr);
-    var ctx=nativeCtx;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#102e55';ctx.fillRect(0,0,size.w,size.h);
-    // Draw the Earth raster resampled to the same square-cell grid as claims.
-    // Never use a coarse display-cell factor that hides real territory at world zoom.
-    var tl=nativeProject(90,-180),br=nativeProject(-90,180);
-    ctx.imageSmoothingEnabled=false;ctx.drawImage(nativeSquareLand,tl.x,tl.y,br.x-tl.x,br.y-tl.y);
-    var z=nativeScale(),cellPx=z*(360/LAND_X_COUNT),keys=Object.keys(landHoldings);
-    // Draw contiguous ownership without individual cell borders.
-    keys.forEach(function(key){var c=landPlotCoords(key);if(!c)return;var pos=nativeProject(landLat(c.y+1),landLon(c.x)),top=nativeProject(landLat(c.y),landLon(c.x));
-      if(pos.x>size.w||pos.x+cellPx<0||top.y>size.h||pos.y<0)return;
-      var h=landHoldings[key],mine=h.owner_id===landUserId;
-      ctx.fillStyle=clanColorsByOwner[h.owner_id] || (mine?'#a348d9':nativeOwnerColor(h.owner_id||h.owner_name));
-      // Project plot corners on the uniform equal-area grid; acreage stays unchanged.
-      var left=pos.x,right=nativeProject(landLat(c.y+1),landLon(c.x+1)).x;
-      var upper=top.y,lower=pos.y,pxW=Math.max(.15,right-left),pxH=Math.max(.15,lower-upper);
-      // Every plot is a complete square on the equal-area display grid.
-      ctx.fillRect(left,upper,pxW+.2,pxH+.2);
-      // Fine gray boundaries show every 5,000-acre plot when zoomed in.
-      if(pxW>=2.5&&pxH>=2.5){ctx.strokeStyle=mine?'rgba(245,250,255,.94)':'rgba(255,245,174,.96)';ctx.lineWidth=Math.max(.18,Math.min(.42,pxW*.024));ctx.strokeRect(left+.25,upper+.25,Math.max(.1,pxW-.5),Math.max(.1,pxH-.5));}
-    });
-    // Only the player's owned tiles receive gray grid outlines.
-    // Labels are derived exclusively from current claimed tiles; eliminated owners have none.
-    // Public territory labels: one anchored base label per other land owner.
-    var foreignOwners=new Map();
-    keys.forEach(function(k){var h=landHoldings[k];if(!h||h.owner_id===landUserId||!h.owner_id)return;
-      if(!foreignOwners.has(h.owner_id))foreignOwners.set(h.owner_id,{name:h.owner_name||h.owner||'Player',keys:[]});
-      foreignOwners.get(h.owner_id).keys.push(k);
-    });
-    foreignOwners.forEach(function(owner){
-      var base=owner.keys.slice().sort()[0],pos=nativePlotPosition(base);if(!pos||pos.x<0||pos.x>size.w||pos.y<0||pos.y>size.h)return;
-      var label=String(owner.name).slice(0,24),fontSize=Math.max(9,Math.min(13,8+nativeZoom*.45));
-      ctx.font='bold '+fontSize+'px sans-serif';ctx.textAlign='center';
-      var width=Math.min(180,ctx.measureText(label).width+14);
-      ctx.fillStyle='rgba(8,20,36,.84)';ctx.fillRect(pos.x-width/2,pos.y-32,width,20);
-      ctx.fillStyle='#fff';ctx.fillText(label,pos.x,pos.y-17);
-      // Enemy bases are intentionally not marked with castles.
-    });
+    var size=nativeSize(),dpr=Math.min(2,devicePixelRatio||1),w=Math.round(size.w*dpr),h=Math.round(size.h*dpr);
+    if(nativeCanvas.width!==w)nativeCanvas.width=w;if(nativeCanvas.height!==h)nativeCanvas.height=h;
+    var ctx=nativeCtx;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=false;nativeDrawStaticMap(ctx,size,dpr);
     // Render ALL players, including self, from the identical server roster.
     nativeEnemyWalkers.forEach(function(w){
       var pos=sharedTroopPosition(w);if(!pos||pos.x<0||pos.y<0||pos.x>size.w||pos.y>size.h)return;
@@ -2690,7 +2754,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     warfareAssets.forEach(function(a){
       if(a.kind==='tank' && a.expires_at && Date.parse(a.expires_at)<=Date.now())return;
       if(!a.plot_key)return;
-      var displayKey=a.plot_key;if((a.kind==='tank'||a.kind==='truck')&&a.owner_id===landUserId){var owned=Object.keys(landHoldings).filter(function(k){return landHoldings[k].owner_id===landUserId&&nativePlotIsSafe(k);});if(owned.length)displayKey=owned[Math.floor(Date.now()/3500+a.id)%owned.length];}var pos=nativePlotPosition(displayKey);if(!pos||pos.x<0||pos.y<0||pos.x>size.w||pos.y>size.h)return;
+      var displayKey=nativeEquipmentPlot(a);var pos=nativePlotPosition(displayKey);if(!pos||pos.x<0||pos.y<0||pos.x>size.w||pos.y>size.h)return;
       drawXernEquipment(ctx,a,pos);return;
       ctx.textAlign='center';ctx.font='bold '+Math.max(17,Math.min(29,18+nativeZoom*.5))+'px sans-serif';
       ctx.shadowColor=a.kind==='tower'?'#38d9ff':a.kind==='tank'?'#e5b04a':'#5bf098';ctx.shadowBlur=11;if(a.kind==='tank'){var tx=pos.x,ty=pos.y-12;ctx.fillStyle='#263b32';ctx.strokeStyle='#e4b95e';ctx.lineWidth=1.8;ctx.beginPath();ctx.roundRect(tx-17,ty+7,34,12,5);ctx.fill();ctx.stroke();ctx.fillStyle='#719a68';ctx.fillRect(tx-12,ty+2,24,11);ctx.fillStyle='#b3cf9b';ctx.fillRect(tx-5,ty-3,12,8);ctx.fillStyle='#c7d6b4';ctx.fillRect(tx+4,ty-1,21,4);ctx.fillStyle='#141d20';for(var wi=-12;wi<=12;wi+=8){ctx.beginPath();ctx.arc(tx+wi,ty+13,2.8,0,Math.PI*2);ctx.fill();}}else ctx.fillText(({tower:'⚡',bush:'🌵',radar:'📡',truck:'🚚',fortress:'🧱',mine:'⛏️'})[a.kind]||'📍',pos.x,pos.y-5);ctx.shadowBlur=0;
@@ -2763,7 +2827,7 @@ input::placeholder{color:var(--muted);opacity:.8}
   function landLoadMap(){
     if(nativeCanvas){landRenderGrid();return;}
     var holder=$('worldMap');holder.innerHTML='';nativeCanvas=document.createElement('canvas');nativeCanvas.style.cssText='width:100%;height:100%;display:block;touch-action:none;cursor:grab;image-rendering:pixelated';holder.appendChild(nativeCanvas);nativeCtx=nativeCanvas.getContext('2d');
-    nativeLand.onload=function(){var mc=document.createElement('canvas');mc.width=nativeLand.naturalWidth;mc.height=nativeLand.naturalHeight;nativeMaskCtx=mc.getContext('2d',{willReadFrequently:true});nativeMaskCtx.drawImage(nativeLand,0,0);nativeMaskPixels=nativeMaskCtx.getImageData(0,0,mc.width,mc.height).data;xernCleanTinyIslands();nativeBuildSquareLand();nativeReady=true;landMapReady=true;landMapLoading=false;landSyncClaims(false).then(function(){landSyncOtherTroops();nativeFocusOwnIfAvailable();landRenderGrid();warfareRefreshAssets();});};
+    nativeLand.onload=function(){var mc=document.createElement('canvas');mc.width=nativeLand.naturalWidth;mc.height=nativeLand.naturalHeight;nativeMaskCtx=mc.getContext('2d',{willReadFrequently:true});nativeMaskCtx.drawImage(nativeLand,0,0);nativeMaskPixels=nativeMaskCtx.getImageData(0,0,mc.width,mc.height).data;xernCleanTinyIslands();nativeBuildSquareLand();nativeMapIndex=null;nativeStaticStamp='';nativeReady=true;landMapReady=true;landMapLoading=false;landSyncClaims(false).then(function(){landSyncOtherTroops();nativeFocusOwnIfAvailable();landRenderGrid();warfareRefreshAssets();});};
     nativeLand.onerror=function(){
       landMapReady=false; landMapLoading=false;
       $('landMsg').textContent='The map image could not load. Reload the game to try again.';
@@ -3460,7 +3524,7 @@ input::placeholder{color:var(--muted);opacity:.8}
     clearTimeout(landSaleWatch); landSaleWatch=null; $('warSellBtn').disabled=false;
     $('warSellMsg').textContent='';
     stk.rows=[]; stk.hold={}; stk.cost={}; stockChartRequest++; drawChart([]); stkRenderList();
-    landHoldings={};
+    landHoldings={};nativeMapIndex=null;nativeStaticStamp='';troopOwnedCache={};troopPositionCache={};
     landClaimsLastApplied=0; nextBattleCheckAt=0;
     landFirstPlot=landSecondPlot=landSelected=null;
     landRallyLatLng=null;
